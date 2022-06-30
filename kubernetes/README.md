@@ -11,7 +11,7 @@ minikube start
 
 You might also need `kubectl` which you can download [here](https://kubernetes.io/docs/tasks/tools/)
 
-### Setup
+### Setup and launch
 
 Take the Kubernetes config file (here `./docker-quay-secret.template.yml`), and save it as `./docker-quay-secret.secrets.yml`.
 

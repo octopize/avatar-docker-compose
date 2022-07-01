@@ -1,4 +1,4 @@
-# avatar-docker-compose
+# avatar-deployment
 
 This repo contains deployment configurations for the avatar software.
 

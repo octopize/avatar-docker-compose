@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: avatar
+  name: avatar-config
+
+data:
+  CELERY_BROKER_URL: redis://redis:6379/0
+  CELERY_RESULT_BACKEND: redis://redis:6379/1
+  RATELIMIT_REDIS_URL: redis://redis:6379/2
+  DB_HOST: db
+  DB_PORT: "5432"
+  ENV_NAME: local/test
+  # Set to externally accessible API url (should be with https)
+  BASE_API_URL: http://api.octopize.local:8000

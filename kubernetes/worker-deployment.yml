@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: avatar
+  name: avatar-worker
+  labels:
+    app: avatar-worker
+spec:
+  selector:
+    matchLabels:
+      app: avatar-worker
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: avatar-worker
+    spec:
+      containers:
+        - name: avatar-worker
+          image: quay.io/octopize/api:latest
+          command: ["celery", "-A", "api.lib.task", "worker", "--loglevel=info"]
+          volumeMounts:
+            - mountPath: /shared
+              name: shared
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "2000m"
+            limits:
+              memory: "32Gi"
+              cpu: "4000m"
+          env:
+            - name: ENV_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: ENV_NAME
+            - name: CELERY_BROKER_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: CELERY_BROKER_URL
+            - name: CELERY_RESULT_BACKEND
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: CELERY_RESULT_BACKEND
+            - name: BASE_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: BASE_API_URL
+            - name: DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: DB_HOST
+            - name: DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: DB_PORT
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: username
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: password
+            - name: FILE_ENCRYPTION_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api
+                  key: file_encryption_key
+      imagePullSecrets:
+        - name: docker-local-pull-secret
+      volumes:
+        - name: shared
+          persistentVolumeClaim:
+            claimName: shared

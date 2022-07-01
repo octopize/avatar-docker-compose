@@ -1,6 +1,6 @@
 # avatar-docker-compose
 
-This repo contains a `docker-compose.yml` file suitable for single-instance avatar deployment.
+This repo contains deployment configurations for the avatar software.
 
 ## Documentation
 

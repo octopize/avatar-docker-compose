@@ -54,6 +54,16 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: BASE_API_URL
+            - name: IS_SENTRY_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: IS_SENTRY_ENABLED
+            - name: IS_TELEMETRY_ENABLED
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: IS_TELEMETRY_ENABLED
             - name: DB_HOST
               valueFrom:
                 configMapKeyRef:

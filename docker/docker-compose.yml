@@ -1,8 +1,15 @@
 version: "3.9"
 
+x-logging: &default-logging
+  options:
+    max-size: "12m"
+    max-file: "5"
+  driver: json-file
+
 services:
   api:
     image: quay.io/octopize/api:latest
+    logging: *default-logging
     volumes:
       - shared:/shared
     restart: on-failure
@@ -31,6 +38,7 @@ services:
 
   worker:
     image: quay.io/octopize/api:latest
+    logging: *default-logging
     # Note that celery defaults its concurrency to the number of CPUs available
     command: celery -A api.lib.task worker --loglevel=info
     environment:
@@ -53,6 +61,7 @@ services:
 
   cron:
     image: quay.io/octopize/api:latest
+    logging: *default-logging
     command: celery -A api.lib.task beat --loglevel=info
     depends_on:
       - redis
@@ -64,6 +73,7 @@ services:
 
   db:
     image: postgres:14.0
+    logging: *default-logging
     environment:
       POSTGRES_USER: ${DB_USER:-avatar}
       POSTGRES_PASSWORD_FILE: /run/secrets/db_password
@@ -75,9 +85,11 @@ services:
 
   redis:
     image: redis:6.2.6-alpine
+    logging: *default-logging
 
   caddy:
     image: caddy:2.4.6-alpine
+    logging: *default-logging
     restart: unless-stopped
     ports:
       - "443:443"

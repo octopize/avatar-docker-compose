@@ -4,10 +4,10 @@ metadata:
   name: db
   namespace: avatar
 spec:
+  selector:
+    app: db
   ports:
     - port: 5432
       targetPort: 5432
       protocol: TCP
       name: postgres
-  selector:
-    app: db

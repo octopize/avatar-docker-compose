@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   namespace: avatar
   name: redis
@@ -7,6 +7,7 @@ metadata:
     app: redis
 
 spec:
+  serviceName: "redis"
   selector:
     matchLabels:
       app: redis
@@ -23,5 +24,5 @@ spec:
             requests:
               cpu: 100m
               memory: 100Mi
-          ports:
-            - containerPort: 6379
+          # ports:
+          #   - containerPort: 6379

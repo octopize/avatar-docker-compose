@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: avatar-api
-          image: quay.io/octopize/api:latest
+          image: quay.io/octopize/api:0.3.8
           volumeMounts:
             - mountPath: /shared
               name: shared

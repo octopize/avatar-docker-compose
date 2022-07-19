@@ -5,9 +5,9 @@ metadata:
   name: avatar-config
 
 data:
-  CELERY_BROKER_URL: redis://redis:6379/0
-  CELERY_RESULT_BACKEND: redis://redis:6379/1
-  RATELIMIT_REDIS_URL: redis://redis:6379/2
+  CELERY_BROKER_URL: redis://redis.avatar:6379/0
+  CELERY_RESULT_BACKEND: redis://redis.avatar:6379/1
+  RATELIMIT_REDIS_URL: redis://redis.avatar:6379/2
   IS_TELEMETRY_ENABLED: "False"
   IS_SENTRY_ENABLED: "False"
   DB_HOST: db

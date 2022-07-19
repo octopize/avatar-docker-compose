@@ -15,3 +15,5 @@ data:
   ENV_NAME: local/test
   # Set to externally accessible API url (should be with https)
   BASE_API_URL: http://api.octopize.local:8000
+  # Set to name of first user
+  AVATAR_FIRST_USER_NAME: avatar_admin

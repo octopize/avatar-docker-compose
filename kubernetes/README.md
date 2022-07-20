@@ -16,7 +16,7 @@ You might also need `kubectl` which you can download [here](https://kubernetes.i
 Take the Kubernetes config file (here `./docker-quay-secret.template.yml`), and save it as `./docker-quay-secret.secrets.yml`.
 
 ```bash
-# copy and edit
+# copy and edit the files and put in the secrets.
 cp ./api-secrets.template.yml ./api-secrets.secrets.yml
 cp ./postgres-secrets.template.yml ./postgres-secrets.secrets.yml
 cp ./docker-quay-secret.template.yml ./docker-quay-secret.secrets.yml

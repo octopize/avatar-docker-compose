@@ -99,6 +99,16 @@ spec:
                 secretKeyRef:
                   name: api
                   key: file_encryption_key
+            - name: AVATAR_FIRST_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: api
+                  key: avatar_first_user_password
+            - name: AVATAR_FIRST_USER_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: AVATAR_FIRST_USER_NAME
           ports:
             - containerPort: 8000
           livenessProbe:

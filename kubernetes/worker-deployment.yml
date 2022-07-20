@@ -85,6 +85,11 @@ spec:
                 secretKeyRef:
                   name: api
                   key: file_encryption_key
+            - name: AVATAR_FIRST_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: api
+                  key: avatar_first_user_password
       imagePullSecrets:
         - name: docker-local-pull-secret
       volumes:

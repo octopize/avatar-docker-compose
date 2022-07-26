@@ -65,6 +65,11 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: PDFGENERATOR_URL
+            - name: TASK_MAX_TIME_LIMIT
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: TASK_MAX_TIME_LIMIT
             - name: DB_HOST
               valueFrom:
                 configMapKeyRef:

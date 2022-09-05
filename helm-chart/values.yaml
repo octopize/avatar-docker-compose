@@ -1,0 +1,54 @@
+# Your env's name
+envName: test.helm
+
+image:
+  pullPolicy: IfNotPresent
+
+# The image tag version. It's a good idea to pin it to something specific.
+# Avoid using "latest".
+avatarVersion: 0.4.5
+
+# Octopize will provide you with this, it should be base64 encoded.
+dockerPullSecret: ""
+
+  # Db connection
+dbHost: 127.0.0.1
+dbPort: "5432"
+dbName: "avatar"
+dbUsername: "avatar"
+# For instance: python -c "import secrets; print(secrets.token_hex(), end='')"
+dbPassword: ""
+
+redisHost: "127.0.0.1:6379"
+
+ingress:
+  useGCP: false
+  gcp:
+    staticIpName: ""
+    managedCertificateName: ""
+
+# GCP-specific configuration
+gcp:
+  # For SQL Proxy
+  ksaName: ""
+  gsaEmail: ""
+  dbInstanceConnectionName: ""
+
+api:
+  # Externally accessible API url (should be with https)
+  baseUrl: https://avatar.yourcompany.com
+
+  isTelemetryEnabled: true
+  isSentryEnabled: true
+
+  # python -c "import secrets; print(secrets.token_hex(), end='')"
+  pepper: TODO
+  # python -c "import secrets; print(secrets.token_hex(), end='')"
+  authjwtSecretKey: TODO
+  # python -c "import base64; import os; print(str(base64.urlsafe_b64encode(os.urandom(32)), encoding='utf-8'), end='')"
+  fileEncryptionKey: TODO
+
+  # Name of first user
+  firstUserName: ""
+  # python -c "import secrets; print(secrets.token_hex(), end='')"
+  firstUserPassword: ""

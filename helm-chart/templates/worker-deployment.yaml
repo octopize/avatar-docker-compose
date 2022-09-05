@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: avatar-worker
+  labels:
+    {{- include "avatar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: worker
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        {{- include "avatar.labels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ .Values.gcp.ksaName | default "" | quote }}
+      containers:
+        - name: avatar-worker
+          image: quay.io/octopize/api:{{ .Values.avatarVersion }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["celery", "-A", "api.lib.task", "worker", "--loglevel=info"]
+          resources:
+            requests:
+              memory: "4Gi"
+              cpu: "2000m"
+            limits:
+              memory: "32Gi"
+              cpu: "4000m"
+          env:
+            {{- template "avatar.app_env" }}
+        {{- template "avatar.db_proxy" . }}
+      imagePullSecrets:
+        - name: docker-local-pull-secret

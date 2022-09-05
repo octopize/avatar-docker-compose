@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: avatar-config
+  labels:
+    {{- include "avatar.labels" . | nindent 4 }}
+
+data:
+  CELERY_BROKER_URL: redis://{{ .Values.redisHost }}/0
+  CELERY_RESULT_BACKEND: redis://{{ .Values.redisHost }}/1
+  RATELIMIT_REDIS_URL: redis://{{ .Values.redisHost }}/2
+  IS_TELEMETRY_ENABLED: {{ .Values.api.isTelemetryEnabled | default "true" | quote }}
+  IS_SENTRY_ENABLED: {{ .Values.api.isSentryEnabled | default "true" | quote }}
+  DB_HOST: {{- if .Values.gcp.dbInstanceConnectionName }} "127.0.0.1" {{- else }} {{ .Values.dbHost | quote }} {{- end }}
+  DB_PORT: {{ .Values.dbPort | quote }}
+  ENV_NAME: {{ .Values.envName | quote }}
+  # Set to externally accessible API url (should be with https)
+  BASE_API_URL: {{ .Values.api.baseUrl | quote }}

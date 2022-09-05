@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: avatar-api
+  labels:
+    {{- include "avatar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: api
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        {{- include "avatar.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      serviceAccountName: {{ .Values.gcp.ksaName | default "" | quote }}
+      containers:
+        - name: avatar-api
+          image: quay.io/octopize/api:{{ .Values.avatarVersion }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "100m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          env:
+            {{- template "avatar.app_env" }}
+            - name: RATELIMIT_REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: RATELIMIT_REDIS_URL
+            - name: PEPPER
+              valueFrom:
+                secretKeyRef:
+                  name: api
+                  key: pepper
+            - name: AUTHJWT_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api
+                  key: authjwt_secret_key
+            - name: AVATAR_FIRST_USER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: api
+                  key: first_user_password
+            - name: AVATAR_FIRST_USER_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: api
+                  key: first_user_name
+          ports:
+            - containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: "/health"
+              port: 8000
+              httpHeaders:
+              - name: Host
+                value: "127.0.0.1"
+            failureThreshold: 3
+            periodSeconds: 30
+            timeoutSeconds: 2
+          livenessProbe:
+            # https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+            httpGet:
+              path: "/health"
+              port: 8000
+              httpHeaders:
+              - name: Host
+                value: "127.0.0.1"
+            failureThreshold: 3
+            periodSeconds: 30
+            timeoutSeconds: 2
+        {{- template "avatar.db_proxy" . }}
+      imagePullSecrets:
+        - name: docker-local-pull-secret

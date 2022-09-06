@@ -5,14 +5,18 @@ metadata:
   labels:
     {{- include "avatar.labels" . | nindent 4 }}
   annotations:
+    cloud.google.com/backend-config: '{"ports": {"8000":"api-backend-config"}}'
     cloud.google.com/neg: '{"ingress": true}'
 
 spec:
-  type: NodePort
+  # type: NodePort
+  # ClusterIP for NEG on GCP
+  type: ClusterIP
   selector:
     # Match theses labels
     app.kubernetes.io/component: api
   ports:
-    - protocol: TCP
+    - name: api
+      protocol: TCP
       port: 8000
-      targetPort: 8000
+      targetPort: api

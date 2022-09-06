@@ -57,7 +57,8 @@ spec:
                   name: api
                   key: first_user_name
           ports:
-            - containerPort: 8000
+            - name: api
+              containerPort: 8000
           readinessProbe:
             httpGet:
               path: "/health"

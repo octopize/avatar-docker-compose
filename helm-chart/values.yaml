@@ -52,3 +52,6 @@ api:
   firstUserName: ""
   # python -c "import secrets; print(secrets.token_hex(), end='')"
   firstUserPassword: ""
+
+  # Path to s3:// or gs://
+  sharedStoragePath: ""

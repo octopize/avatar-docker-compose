@@ -16,3 +16,4 @@ data:
   ENV_NAME: {{ .Values.envName | quote }}
   # Set to externally accessible API url (should be with https)
   BASE_API_URL: {{ .Values.api.baseUrl | quote }}
+  SHARED_STORAGE_PATH: {{ .Values.api.sharedStoragePath | quote }}

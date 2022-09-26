@@ -120,6 +120,11 @@ Define the default app env variables
                 secretKeyRef:
                   name: api
                   key: file_encryption_key
+            - name: SHARED_STORAGE_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: SHARED_STORAGE_PATH
 {{- end }}
 
 {{/*

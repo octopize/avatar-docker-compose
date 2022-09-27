@@ -60,6 +60,11 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: BASE_API_URL
+            - name: PDFGENERATOR_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: PDFGENERATOR_URL
             - name: DB_HOST
               valueFrom:
                 configMapKeyRef:

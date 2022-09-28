@@ -25,10 +25,10 @@ spec:
           resources:
             requests:
               memory: "4Gi"
-              cpu: "2000m"
+              cpu: "1000m"
             limits:
               memory: "32Gi"
-              cpu: "4000m"
+              cpu: "2000m"
           env:
             - name: ENV_NAME
               valueFrom:
@@ -60,6 +60,11 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: BASE_API_URL
+            - name: PDFGENERATOR_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: PDFGENERATOR_URL
             - name: DB_HOST
               valueFrom:
                 configMapKeyRef:

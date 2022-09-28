@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: pdfgenerator
-          image: quay.io/octopize/pdfgenerator:0.1.0
+          image: quay.io/octopize/pdfgenerator:latest
           ports:
             - containerPort: 8000
       imagePullSecrets:

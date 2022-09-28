@@ -47,6 +47,11 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: BASE_API_URL
+            - name: TASK_MAX_TIME_LIMIT
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: TASK_MAX_TIME_LIMIT
             - name: DB_PORT
               value: "0" # DB_PORT is set by k8s to "tcp://" which fails validation
       imagePullSecrets:

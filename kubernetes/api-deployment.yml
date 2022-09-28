@@ -114,6 +114,11 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: AVATAR_FIRST_USER_NAME
+            - name: TASK_MAX_TIME_LIMIT
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: TASK_MAX_TIME_LIMIT
           ports:
             - containerPort: 8000
           livenessProbe:

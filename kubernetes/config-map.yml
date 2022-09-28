@@ -18,3 +18,4 @@ data:
   PDFGENERATOR_URL: http://pdfgenerator:8001/
   # Set to name of first user
   AVATAR_FIRST_USER_NAME: avatar_admin
+  TASK_MAX_TIME_LIMIT: ""

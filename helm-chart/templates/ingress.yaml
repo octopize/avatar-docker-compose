@@ -16,6 +16,8 @@ spec:
         number: 8000
 
 {{- else if eq .Values.ingress.useGCP true }}
+
+{{- if .Values.ingress.gcp.managedCertificateName }}
 apiVersion: networking.gke.io/v1
 kind: ManagedCertificate
 metadata:
@@ -25,7 +27,7 @@ metadata:
 spec:
   domains:
     - {{ get (.Values.api.baseUrl | urlParse) "host" }}
-
+{{- end }}
 ---
 
 # https://cloud.google.com/kubernetes-engine/docs/how-to/ingress-features
@@ -34,8 +36,9 @@ kind: FrontendConfig
 metadata:
   name: api-frontend-config
 spec:
+# https://cloud.google.com/kubernetes-engine/docs/how-to/ingress-features#https_redirect
   redirectToHttps:
-    enabled: true
+    enabled: true #disable (or not? maybe internal communication is done with HTTP) once we have a certificate on the load balancer to prevent connection as http
 
 ---
 
@@ -60,7 +63,11 @@ metadata:
   name: api-ingress
   annotations:
     kubernetes.io/ingress.global-static-ip-name: {{ .Values.ingress.gcp.staticIpName | quote }}
+    {{- if .Values.ingress.gcp.managedCertificateName }}
     networking.gke.io/managed-certificates: {{ .Values.ingress.gcp.managedCertificateName | quote }}
+    {{- else if .Values.ingress.gcp.preSharedCertificateName }}
+    ingress.gcp.kubernetes.io/pre-shared-cert: {{ .Values.ingress.gcp.preSharedCertificateName | quote }}
+    {{ end }}
     kubernetes.io/ingress.class: "gce"
   labels:
     {{- include "avatar.labels" . | nindent 4 }}

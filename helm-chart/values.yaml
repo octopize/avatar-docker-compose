@@ -26,10 +26,12 @@ ingress:
   gcp:
     staticIpName: ""
     managedCertificateName: ""
+    preSharedCertificateName: ""
 
 # GCP-specific configuration
 gcp:
   # For SQL Proxy
+  # https://cloud.google.com/sql/docs/postgres/connect-kubernetes-engine#workload-identity
   ksaName: ""
   gsaEmail: ""
   dbInstanceConnectionName: ""

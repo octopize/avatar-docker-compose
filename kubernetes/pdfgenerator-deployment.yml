@@ -22,3 +22,4 @@ spec:
             - containerPort: 8000
       imagePullSecrets:
         - name: docker-local-pull-secret
+  

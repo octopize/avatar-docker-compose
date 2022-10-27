@@ -22,6 +22,10 @@ spec:
         - name: avatar-worker
           image: quay.io/octopize/api:{{ .Values.avatarVersion }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          volumeMounts:
+            - mountPath: /var/run/secrets
+              name: secrets
+              readOnly: true
           command: ["celery", "-A", "api.lib.task", "worker", "--loglevel=info"]
           resources:
             requests:
@@ -35,3 +39,16 @@ spec:
         {{- template "avatar.db_proxy" . }}
       imagePullSecrets:
         - name: docker-local-pull-secret
+      volumes:
+        - name: secrets
+          secret:
+            secretName: api
+            items:
+            - key: db_name
+              path: db_name
+            - key: db_user
+              path: db_user
+            - key: db_password
+              path: db_password
+            - key: file_encryption_key
+              path: file_encryption_key

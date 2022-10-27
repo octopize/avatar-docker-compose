@@ -34,16 +34,20 @@ spec:
               memory: "2Gi"
               cpu: "1000m"
           env:
+          # Postgres needs these values to be passed as env variables to create the database,
+          # so we can't mount a volume
+            - name: POSTGRES_PASSWORD_FILE
+              value: /var/run/secrets/db_password #where the secrets volume is mounted
             - name: POSTGRES_USER
               valueFrom:
                 secretKeyRef:
                   name: postgres-secret
-                  key: username
+                  key: db_user
             - name: POSTGRES_DB
               valueFrom:
                 secretKeyRef:
                   name: postgres-secret
-                  key: dbname
+                  key: db_name
 
       volumes:
         - name: postgres-data

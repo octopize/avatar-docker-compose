@@ -94,6 +94,18 @@ spec:
             sources:
             - secret:
                 name: api
+                # We use items as we don't want to put every single secret for the worker container
+                items:
+                - key: avatar_first_user_password
+                  path: avatar_first_user_password # path is required no matter what
+                - key: file_encryption_key
+                  path: file_encryption_key
             - secret:
                 name: postgres-secret
-      
+                items:
+                - key: db_password
+                  path: db_password
+                - key: db_user  
+                  path: db_user
+                - key: db_name  
+                  path: db_name

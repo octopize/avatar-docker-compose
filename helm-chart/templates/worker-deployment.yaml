@@ -43,6 +43,7 @@ spec:
         - name: secrets
           secret:
             secretName: api
+            # We specifically list only the secrets that are needed in the image
             items:
             - key: db_name
               path: db_name

@@ -105,6 +105,7 @@ spec:
           persistentVolumeClaim:
             claimName: shared
         - name: secrets
+          # 'projected' allows multiple sources to be combined into a single volume
           projected:
             sources:
             - secret:

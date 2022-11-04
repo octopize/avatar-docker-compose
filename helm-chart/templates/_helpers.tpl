@@ -105,21 +105,6 @@ Define the default app env variables
                 configMapKeyRef:
                   name: avatar-config
                   key: DB_PORT
-            - name: DB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: db_username
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: db_password
-            - name: FILE_ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: file_encryption_key
             - name: SHARED_STORAGE_PATH
               valueFrom:
                 configMapKeyRef:

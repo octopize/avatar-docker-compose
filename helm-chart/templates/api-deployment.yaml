@@ -22,6 +22,10 @@ spec:
         - name: avatar-api
           image: quay.io/octopize/api:{{ .Values.avatarVersion }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          volumeMounts:
+            - mountPath: /var/run/secrets
+              name: secrets
+              readOnly: true
           resources:
             requests:
               memory: "512Mi"
@@ -36,26 +40,11 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: RATELIMIT_REDIS_URL
-            - name: PEPPER
+            - name: USE_EMAIL_AUTHENTICATION
               valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: pepper
-            - name: AUTHJWT_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: authjwt_secret_key
-            - name: AVATAR_FIRST_USER_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: first_user_password
-            - name: AVATAR_FIRST_USER_NAME
-              valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: first_user_name
+                configMapKeyRef:
+                  name: avatar-config
+                  key: USE_EMAIL_AUTHENTICATION
           ports:
             - name: api
               containerPort: 8000
@@ -83,3 +72,7 @@ spec:
         {{- template "avatar.db_proxy" . }}
       imagePullSecrets:
         - name: docker-local-pull-secret
+      volumes:
+        - name: secrets
+          secret:
+            secretName: api

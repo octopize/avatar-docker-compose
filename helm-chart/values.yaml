@@ -11,7 +11,7 @@ avatarVersion: 0.4.5
 # Octopize will provide you with this, it should be base64 encoded.
 dockerPullSecret: ""
 
-  # Db connection
+# Db connection
 dbHost: 127.0.0.1
 dbPort: "5432"
 dbName: "avatar"
@@ -29,6 +29,7 @@ ingress:
 
 # GCP-specific configuration
 gcp:
+  useGCP: false
   # For SQL Proxy
   ksaName: ""
   gsaEmail: ""
@@ -41,17 +42,19 @@ api:
   isTelemetryEnabled: true
   isSentryEnabled: true
 
-  # python -c "import secrets; print(secrets.token_hex(), end='')"
-  pepper: TODO
-  # python -c "import secrets; print(secrets.token_hex(), end='')"
-  authjwtSecretKey: TODO
+  pepper: TODO   # python -c "import secrets; print(secrets.token_hex(), end='')"
+  authjwtSecretKey: TODO   # python -c "import secrets; print(secrets.token_hex(), end='')"
   # python -c "import base64; import os; print(str(base64.urlsafe_b64encode(os.urandom(32)), encoding='utf-8'), end='')"
   fileEncryptionKey: TODO
 
-  # Name of first user
+
+  # If useEmailAuthentication is true, provide only adminEmail. Else, provide
+  # firstUserName and firstUserPassword.
+  useEmailAuthentication: false
+  adminEmails: 
+    - ""
   firstUserName: ""
-  # python -c "import secrets; print(secrets.token_hex(), end='')"
-  firstUserPassword: ""
+  firstUserPassword: ""   # python -c "import secrets; print(secrets.token_hex(), end='')"
 
   # Path to s3:// or gs://
   sharedStoragePath: ""

@@ -22,6 +22,9 @@ spec:
           volumeMounts:
             - mountPath: /shared
               name: shared
+            - mountPath: /var/run/secrets
+              name: secrets
+              readOnly: true
           resources:
             requests:
               memory: "4Gi"
@@ -80,29 +83,29 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: DB_PORT
-            - name: DB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secret
-                  key: username
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secret
-                  key: password
-            - name: FILE_ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: file_encryption_key
-            - name: AVATAR_FIRST_USER_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: avatar_first_user_password
       imagePullSecrets:
         - name: docker-local-pull-secret
       volumes:
         - name: shared
           persistentVolumeClaim:
             claimName: shared
+        - name: secrets
+          projected:
+            sources:
+            - secret:
+                name: api
+                # We use items as we don't want to put every single secret for the worker container
+                items:
+                - key: avatar_first_user_password
+                  path: avatar_first_user_password # path is required no matter what
+                - key: file_encryption_key
+                  path: file_encryption_key
+            - secret:
+                name: postgres-secret
+                items:
+                - key: db_password
+                  path: db_password
+                - key: db_user  
+                  path: db_user
+                - key: db_name  
+                  path: db_name

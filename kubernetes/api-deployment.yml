@@ -21,6 +21,9 @@ spec:
           volumeMounts:
             - mountPath: /shared
               name: shared
+            - mountPath: /var/run/secrets
+              name: secrets
+              readOnly: true
           resources:
             requests:
               memory: "512Mi"
@@ -79,41 +82,6 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: DB_PORT
-            - name: DB_USER
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secret
-                  key: username
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: postgres-secret
-                  key: password
-            - name: PEPPER
-              valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: pepper
-            - name: AUTHJWT_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: authjwt_secret_key
-            - name: FILE_ENCRYPTION_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: file_encryption_key
-            - name: AVATAR_FIRST_USER_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: api
-                  key: avatar_first_user_password
-            - name: AVATAR_FIRST_USER_NAME
-              valueFrom:
-                configMapKeyRef:
-                  name: avatar-config
-                  key: AVATAR_FIRST_USER_NAME
             - name: TASK_MAX_TIME_LIMIT
               valueFrom:
                 configMapKeyRef:
@@ -136,3 +104,12 @@ spec:
         - name: shared
           persistentVolumeClaim:
             claimName: shared
+        - name: secrets
+          # 'projected' allows multiple sources to be combined into a single volume
+          projected:
+            sources:
+            - secret:
+                name: api
+            - secret:
+                name: postgres-secret
+      

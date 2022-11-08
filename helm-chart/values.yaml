@@ -6,7 +6,7 @@ image:
 
 # The image tag version. It's a good idea to pin it to something specific.
 # Avoid using "latest".
-avatarVersion: 0.4.5
+avatarVersion: 0.4.12
 
 # Octopize will provide you with this, it should be base64 encoded.
 dockerPullSecret: ""
@@ -58,3 +58,7 @@ api:
 
   # Path to s3:// or gs://
   sharedStoragePath: ""
+
+  # AWS Mail account used to send mails for password reset
+  awsMailAccountAccessKeyId: ""
+  awsMailAccountSecretAccessKey: ""

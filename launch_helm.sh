@@ -2,20 +2,20 @@
 
 set -euo pipefail
 
-namespace="$NAMESPACE"
-release_name="$RELEASE_NAME"
-docker_pull_secret="$DOCKER_PULL_SECRET"
+namespace="${NAMESPACE-}"
+release_name="${RELEASE_NAME-}"
+docker_pull_secret="${DOCKER_PULL_SECRET-}"
 
 if [ -z "$namespace" ] || [ -z "$release_name" ]; then
       echo "You must supply NAMESPACE and RELEASE_NAME."
-      echo RELEASE_NAME="$RELEASE_NAME"
-      echo NAMESPACE="$NAMESPACE"
+      echo RELEASE_NAME="$release_name"
+      echo NAMESPACE="$namespace"
       exit 1
 fi
 
 if [ -z "$docker_pull_secret"]; then
       echo "You must supply DOCKER_PULL_SECRET."
-      echo DOCKER_PULL_SECRET="$DOCKER_PULL_SECRET"
+      echo DOCKER_PULL_SECRET="$docker_pull_secret"
       exit 1
 fi
 
@@ -28,13 +28,16 @@ db_name="${DB_NAME-avatar}"
 
 avatar_version="${AVATAR_VERSION-latest}"
 use_email_auth="${USE_EMAIL_AUTH-false}"
-single_admin_email="${SINGLE_ADMIN_EMAIL}"
+single_admin_email="${SINGLE_ADMIN_EMAIL-}" # We only accept a single email locally to not make the script overly complicated.
+aws_mail_account_access_key_id="${AWS_MAIL_ACCOUNT_ACCESS_KEY_ID-}"
+aws_mail_account_secret_access_key="${AWS_MAIL_ACCOUNT_SECRET_ACCESS_KEY-}"
 
 echo AVATAR_VERSION="$avatar_version"
 echo USE_EMAIL_AUTH="$use_email_auth"
 
+
 if [ "$use_email_auth" = "false" ]; then
-      # Authentication with username and password
+      ## Authentication with username and password
       first_user_name="${FIRST_USER_NAME-avatar_admin}"
       generated_password=$(python -c "import secrets; print(secrets.token_hex(), end='')")
       first_user_password="${FIRST_USER_PASSWORD-$generated_password}"
@@ -45,17 +48,12 @@ elif [ "$use_email_auth" = "true" ] && [ -z "$single_admin_email" ]; then
       echo "You must supply SINGLE_ADMIN_EMAIL if USE_EMAIL_AUTH=true"
       echo SINGLE_ADMIN_EMAIL="$single_admin_email"
       exit 1
-elif [ "$use_email_auth" = "true" ] && ([ -z "$AWS_MAIL_ACCOUNT_ACCESS_KEY_ID" ] || [ -z "$AWS_MAIL_ACCOUNT_SECRET_ACCESS_KEY" ]); then
-      echo "You must supply AWS_MAIL_ACCOUNT_ACCESS_KEY_ID and AWS_MAIL_ACCOUNT_SECRET_ACCESS_KEY if  USE_EMAIL_AUTH=true"
+elif [ "$use_email_auth" = "true" ] && ([ -z "$aws_mail_account_access_key_id" ] || [ -z "$aws_mail_account_secret_access_key" ]); then
+      echo "You must supply AWS_MAIL_ACCOUNT_ACCESS_KEY_ID and AWS_MAIL_ACCOUNT_SECRET_ACCESS_KEY if USE_EMAIL_AUTH=true"
       echo AWS_MAIL_ACCOUNT_ACCESS_KEY_ID="$aws_mail_account_access_key_id"
       echo AWS_MAIL_ACCOUNT_SECRET_ACCESS_KEY="$aws_mail_account_secret_access_key"
       exit 1
 else
-      # Authentication with email
-      single_admin_email="$SINGLE_ADMIN_EMAIL"
-      aws_mail_account_access_key_id="$AWS_MAIL_ACCOUNT_ACCESS_KEY_ID"
-      aws_mail_account_secret_access_key="$AWS_MAIL_ACCOUNT_SECRET_ACCESS_KEY"
-
       echo SINGLE_ADMIN_EMAIL="$single_admin_email"
       echo AWS_MAIL_ACCOUNT_ACCESS_KEY_ID="$aws_mail_account_access_key_id"
       echo AWS_MAIL_ACCOUNT_SECRET_ACCESS_KEY="$aws_mail_account_secret_access_key"

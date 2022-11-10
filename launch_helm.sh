@@ -2,8 +2,6 @@
 
 set -euo pipefail
 
-timeout="${TIMEOUT-60}" # Time to wait for the pods to be up before exiting
-
 namespace="${NAMESPACE-}"
 release_name="${RELEASE_NAME-}"
 docker_pull_secret="${DOCKER_PULL_SECRET-}"
@@ -74,8 +72,7 @@ echo postgres_host="$postgres_host"
 redis_release="$release_name-redis"
 redis_host="$redis_release-master.$namespace.svc.cluster.local"
 
-
-timeout=60
+timeout="${TIMEOUT-60}" # Time to wait for the pods to be up before exiting
 echo "Waiting for ${timeout} seconds for the pods to be up before continuing... You can configure the time using TIMEOUT"
 sleep ${timeout}
 

@@ -2,6 +2,8 @@
 
 set -euo pipefail
 
+timeout="${TIMEOUT-60}" # Time to wait for the pods to be up before exiting
+
 namespace="${NAMESPACE-}"
 release_name="${RELEASE_NAME-}"
 docker_pull_secret="${DOCKER_PULL_SECRET-}"
@@ -73,47 +75,43 @@ redis_release="$release_name-redis"
 redis_host="$redis_release-master.$namespace.svc.cluster.local"
 
 
-wait_time=60
-echo "Waiting for ${wait_time} seconds for the pods to be up before continuing..."
-sleep ${wait_time}
+# timeout=60
+# echo "Waiting for ${timeout} seconds for the pods to be up before continuing... You can configure the time using TIMEOUT"
+# sleep ${timeout}
 
-# This is needed as passing --set auth.database=$db_name does not work. The database does not get created.
-echo "Create the database with 'create database ${db_name};' in the following psql prompt. Exit when done."
+# # This is needed as passing --set auth.database=$db_name does not work. The database does not get created.
+# echo "Create the database with 'create database ${db_name};' in the following psql prompt. Exit when done."
 
-kubectl run "$postgres_release-postgresql-client" --rm --tty -i --restart='Never' --namespace "$namespace" --image docker.io/bitnami/postgresql:14.5.0-debian-11-r6 --env="PGPASSWORD=$db_password" \
-      --command -- psql --host "$postgres_host" -U "$db_user" -d postgres -p 5432
+# kubectl run "$postgres_release-postgresql-client" --rm --tty -i --restart='Never' --namespace "$namespace" --image docker.io/bitnami/postgresql:14.5.0-debian-11-r6 --env="PGPASSWORD=$db_password" \
+#       --command -- psql --host "$postgres_host" -U "$db_user" -d postgres -p 5432
+
+cmd=(helm install --debug "$release_name" ./helm-chart --namespace "$namespace" --create-namespace \
+      --set dockerPullSecret="$docker_pull_secret" \
+      --set avatarVersion="$avatar_version" \
+      --set dbPassword="$db_password" \
+      --set dbName="$db_name" \
+      --set dbUser="$db_user" \
+      --set dbHost="$postgres_host" \
+      --set redisHost="$redis_host" \
+      --set api.pepper=$(python -c "import secrets; print(secrets.token_hex(), end='')") \
+      --set api.authjwtSecretKey=$(python -c "import secrets; print(secrets.token_hex(), end='')") \
+      --set api.fileEncryptionKey=$(python -c "import base64; import os; print(str(base64.urlsafe_b64encode(os.urandom(32)), encoding='utf-8'), end='')") \
+      --set api.avatarVersion="$avatar_version" \
+      --set api.useEmailAuthentication="$use_email_auth" \
+)
 
 if [ "$use_email_auth" = "false" ]; then
-      helm install --debug "$release_name" ./helm-chart --namespace "$namespace" --create-namespace \
-      --set dockerPullSecret="$docker_pull_secret" \
-      --set avatarVersion="$avatar_version" \
-      --set dbPassword="$db_password" \
-      --set dbName="$db_name" \
-      --set dbUser="$db_user" \
-      --set dbHost="$postgres_host" \
-      --set redisHost="$redis_host" \
-      --set api.pepper=$(python -c "import secrets; print(secrets.token_hex(), end='')") \
-      --set api.authjwtSecretKey=$(python -c "import secrets; print(secrets.token_hex(), end='')") \
-      --set api.fileEncryptionKey=$(python -c "import base64; import os; print(str(base64.urlsafe_b64encode(os.urandom(32)), encoding='utf-8'), end='')") \
-      --set api.avatarVersion="$avatar_version" \
-      --set api.useEmailAuthentication="$use_email_auth" \
+      cmd+=(
       --set api.firstUserName="$first_user_name" \
       --set api.firstUserPassword="$first_user_password"
-else 
-      helm install --debug "$release_name" ./helm-chart --namespace "$namespace" --create-namespace \
-      --set dockerPullSecret="$docker_pull_secret" \
-      --set avatarVersion="$avatar_version" \
-      --set dbPassword="$db_password" \
-      --set dbName="$db_name" \
-      --set dbUser="$db_user" \
-      --set dbHost="$postgres_host" \
-      --set redisHost="$redis_host" \
-      --set api.pepper=$(python -c "import secrets; print(secrets.token_hex(), end='')") \
-      --set api.authjwtSecretKey=$(python -c "import secrets; print(secrets.token_hex(), end='')") \
-      --set api.fileEncryptionKey=$(python -c "import base64; import os; print(str(base64.urlsafe_b64encode(os.urandom(32)), encoding='utf-8'), end='')") \
-      --set api.avatarVersion="$avatar_version" \
-      --set api.useEmailAuthentication="$use_email_auth" \
+      )
+else
+      cmd+=(
       --set "api.adminEmails[0]=$single_admin_email" \
       --set api.awsMailAccountAccessKeyId="$aws_mail_account_access_key_id" \
-      --set api.awsMailAccountSecretAccessKey="$aws_mail_account_secret_access_key"
+      --set api.awsMailAccountSecretAccessKey="$aws_mail_account_secret_access_key"\
+      )
 fi
+
+# Run the helm install
+"${cmd[@]}"

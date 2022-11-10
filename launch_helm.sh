@@ -75,15 +75,15 @@ redis_release="$release_name-redis"
 redis_host="$redis_release-master.$namespace.svc.cluster.local"
 
 
-# timeout=60
-# echo "Waiting for ${timeout} seconds for the pods to be up before continuing... You can configure the time using TIMEOUT"
-# sleep ${timeout}
+timeout=60
+echo "Waiting for ${timeout} seconds for the pods to be up before continuing... You can configure the time using TIMEOUT"
+sleep ${timeout}
 
-# # This is needed as passing --set auth.database=$db_name does not work. The database does not get created.
-# echo "Create the database with 'create database ${db_name};' in the following psql prompt. Exit when done."
+# This is needed as passing --set auth.database=$db_name does not work. The database does not get created.
+echo "Create the database with 'create database ${db_name};' in the following psql prompt. Exit when done."
 
-# kubectl run "$postgres_release-postgresql-client" --rm --tty -i --restart='Never' --namespace "$namespace" --image docker.io/bitnami/postgresql:14.5.0-debian-11-r6 --env="PGPASSWORD=$db_password" \
-#       --command -- psql --host "$postgres_host" -U "$db_user" -d postgres -p 5432
+kubectl run "$postgres_release-postgresql-client" --rm --tty -i --restart='Never' --namespace "$namespace" --image docker.io/bitnami/postgresql:14.5.0-debian-11-r6 --env="PGPASSWORD=$db_password" \
+      --command -- psql --host "$postgres_host" -U "$db_user" -d postgres -p 5432
 
 cmd=(helm install --debug "$release_name" ./helm-chart --namespace "$namespace" --create-namespace \
       --set dockerPullSecret="$docker_pull_secret" \

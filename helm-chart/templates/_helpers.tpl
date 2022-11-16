@@ -36,9 +36,6 @@ Common labels
 {{- define "avatar.labels" -}}
 helm.sh/chart: {{ include "avatar.chart" . }}
 {{ include "avatar.selectorLabels" . }}
-{{- if .Chart.AppVersion }}
-app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
-{{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
 {{- end }}
 
@@ -110,6 +107,11 @@ Define the default app env variables
                 configMapKeyRef:
                   name: avatar-config
                   key: SHARED_STORAGE_PATH
+            - name: PDFGENERATOR_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: PDFGENERATOR_URL
 {{- end }}
 
 {{/*

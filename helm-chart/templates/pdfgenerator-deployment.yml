@@ -23,10 +23,10 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           resources:
             requests:
-              memory: "512Mi"
-              cpu: "100m"
+              memory: "2Gi"
+              cpu: "1000m"
             limits:
-              memory: "1Gi"
+              memory: "2Gi"
               cpu: "1000m"
           ports:
             - name: pdfgenerator

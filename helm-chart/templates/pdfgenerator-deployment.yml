@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: avatar-pdf
+  labels:
+    {{- include "avatar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pdfgenerator
+
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: pdfgenerator
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        {{- include "avatar.labels" . | nindent 8 }}
+        app.kubernetes.io/component: pdfgenerator
+    spec:
+      containers:
+        - name: pdfgenerator
+          image: quay.io/octopize/pdfgenerator:{{ .Values.pdfgeneratorVersion }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1000m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+          ports:
+            - name: pdfgenerator
+              containerPort: 8000
+      imagePullSecrets:
+        - name: docker-local-pull-secret

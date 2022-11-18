@@ -18,6 +18,11 @@ render-helm:
 .PHONY: render-helm
 
 start-helm-local:
+	### Typical usage ###
+	## Create the whole stack from scratch
+	# make start-helm-local
+	## Update only the running avatar release
+	# ONLY_AVATAR="true" UPGRADE="true" make start-helm-local
 	minikube status 1> /dev/null || minikube start
 	bash launch_helm.sh
 .PHONY: start-helm-local

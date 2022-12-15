@@ -29,8 +29,8 @@ spec:
           command: ["celery", "-A", "api.lib.task", "worker", "--loglevel=info"]
           resources:
             requests:
-              memory: "4Gi"
-              cpu: "2000m"
+              memory: "32Gi"
+              cpu: "4000m"
             limits:
               memory: "32Gi"
               cpu: "4000m"

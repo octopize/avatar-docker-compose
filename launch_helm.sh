@@ -130,6 +130,8 @@ cmd=(helm "$subcommand" --debug "$release_name" ./helm-chart --namespace "$names
       --set avatarVersion="$avatar_version" \
       --set pdfgeneratorVersion="$pdfgenerator_version" \
       --set api.useEmailAuthentication="$use_email_auth" \
+      --set api.isTelemetryEnabled="false" \
+      --set api.isSentryEnabled="false" \
 )
 
 if [ "$use_email_auth" = "false" ]; then

@@ -29,11 +29,11 @@ spec:
           command: ["celery", "-A", "api.lib.task", "worker", "--loglevel=info"]
           resources:
             requests:
-              memory: "32Gi"
-              cpu: "4000m"
+              memory: {{ .Values.resources.workerMemoryRequest }}
+              cpu: {{ .Values.resources.workerCpuRequest }}
             limits:
-              memory: "32Gi"
-              cpu: "4000m"
+              memory: {{ .Values.resources.workerMemoryRequest }}
+              cpu: {{ .Values.resources.workerCpuRequest }}
           env:
             {{- template "avatar.app_env" }}
         {{- template "avatar.db_proxy" . }}

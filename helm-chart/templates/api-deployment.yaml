@@ -28,11 +28,11 @@ spec:
               readOnly: true
           resources:
             requests:
-              memory: "4Gi"
-              cpu: "1000m"
+              memory: {{ .Values.resources.apiMemoryRequest }}
+              cpu: {{ .Values.resources.apiCpuRequest }}
             limits:
-              memory: "4Gi"
-              cpu: "1000m"
+              memory: {{ .Values.resources.apiMemoryRequest }}
+              cpu: {{ .Values.resources.apiCpuRequest }}
           env:
             {{- template "avatar.app_env" }}
             - name: RATELIMIT_REDIS_URL

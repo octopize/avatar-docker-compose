@@ -20,6 +20,15 @@ dbUsername: "avatar"
 # For instance: python -c "import secrets; print(secrets.token_hex(), end='')"
 dbPassword: ""
 
+resources:
+  workerMemoryRequest: "32Gi"
+  apiMemoryRequest: "4Gi"
+  pdfgeneratorMemoryRequest: "2Gi"
+
+  workerCpuRequest: "4000m"
+  apiCpuRequest: "1000m"
+  pdfgeneratorCpuRequest: "1000m"
+
 redisHost: "127.0.0.1:6379"
 
 pdfgeneratorHost: "avatar-pdf"
@@ -55,6 +64,7 @@ api:
   # If useEmailAuthentication is true, provide only adminEmail. Else, provide
   # firstUserName and firstUserPassword.
   useEmailAuthentication: false
+  organizationName: ""
   adminEmails: 
     - ""
   firstUserName: ""

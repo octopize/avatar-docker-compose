@@ -29,9 +29,20 @@ db_name="${DB_NAME-avatar}"
 avatar_version="${AVATAR_VERSION-latest}"
 pdfgenerator_version="${PDFGENERATOR_VERSION-latest}"
 use_email_auth="${USE_EMAIL_AUTH-false}"
+is_telemetry_enabled="false"
+is_sentry_enabled="false"
+organization_name="${ORGANIZATION_NAME-octopize}"
 single_admin_email="${SINGLE_ADMIN_EMAIL-}" # We only accept a single email locally to not make the script overly complicated.
 aws_mail_account_access_key_id="${AWS_MAIL_ACCOUNT_ACCESS_KEY_ID-}"
 aws_mail_account_secret_access_key="${AWS_MAIL_ACCOUNT_SECRET_ACCESS_KEY-}"
+
+worker_memory_request="4Gi"
+api_memory_request="1Gi"
+pdfgenerator_memory_request="2Gi"
+
+worker_cpu_request="2000m"
+api_cpu_request="512m"
+pdfgenerator_cpu_request="512m"
 
 echo AVATAR_VERSION="$avatar_version"
 echo PDFGENERATOR_VERSION="$pdfgenerator_version"
@@ -130,8 +141,15 @@ cmd=(helm "$subcommand" --debug "$release_name" ./helm-chart --namespace "$names
       --set avatarVersion="$avatar_version" \
       --set pdfgeneratorVersion="$pdfgenerator_version" \
       --set api.useEmailAuthentication="$use_email_auth" \
-      --set api.isTelemetryEnabled="false" \
-      --set api.isSentryEnabled="false" \
+      --set api.isTelemetryEnabled="$is_telemetry_enabled" \
+      --set api.isSentryEnabled="$is_sentry_enabled" \
+      --set api.organizationName="$organization_name" \
+      --set resources.workerMemoryRequest="$worker_memory_request" \
+      --set resources.apiMemoryRequest="$api_memory_request" \
+      --set resources.pdfgeneratorMemoryRequest="$pdfgenerator_memory_request" \
+      --set resources.workerCpuRequest="$worker_cpu_request" \
+      --set resources.apiCpuRequest="$api_cpu_request" \
+      --set resources.pdfgeneratorCpuRequest="$pdfgenerator_cpu_request" \
 )
 
 if [ "$use_email_auth" = "false" ]; then

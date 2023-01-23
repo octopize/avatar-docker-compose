@@ -9,8 +9,8 @@ data:
   CELERY_BROKER_URL: redis://{{ .Values.redisHost }}/0
   CELERY_RESULT_BACKEND: redis://{{ .Values.redisHost }}/1
   RATELIMIT_REDIS_URL: redis://{{ .Values.redisHost }}/2
-  IS_TELEMETRY_ENABLED: {{ .Values.api.isTelemetryEnabled | default "true" | quote }}
-  IS_SENTRY_ENABLED: {{ .Values.api.isSentryEnabled | default "true" | quote }}
+  IS_TELEMETRY_ENABLED: {{ .Values.api.isTelemetryEnabled | quote }}
+  IS_SENTRY_ENABLED: {{ .Values.api.isSentryEnabled | quote }}
   DB_HOST: {{- if .Values.gcp.dbInstanceConnectionName }} "127.0.0.1" {{- else }} {{ .Values.dbHost | quote }} {{- end }}
   DB_PORT: {{ .Values.dbPort | quote }}
   ENV_NAME: {{ .Values.envName | quote }}

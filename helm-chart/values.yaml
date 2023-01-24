@@ -76,3 +76,6 @@ api:
   # AWS Mail account used to send mails for password reset
   awsMailAccountAccessKeyId: ""
   awsMailAccountSecretAccessKey: ""
+
+  maxAllowedDimensionsPerDataset: 200
+  maxAllowedLinesPerDataset: 2000000

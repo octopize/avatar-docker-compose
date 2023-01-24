@@ -19,5 +19,5 @@ data:
   PDFGENERATOR_URL: http://{{ .Values.pdfgeneratorHost }}:{{ .Values.pdfgeneratorPort }}
   SHARED_STORAGE_PATH: {{ .Values.api.sharedStoragePath | quote }}
   USE_EMAIL_AUTHENTICATION: {{ .Values.api.useEmailAuthentication | default "false" | quote }}
-  MAX_ALLOWED_DIMENSIONS_PER_DATASET: {{ .Values.api.maxAllowedDimensionsPerDataset }}
-  MAX_ALLOWED_LINES_PER_DATASET: {{ .Values.api.maxAllowedLinesPerDataset }}
+  MAX_ALLOWED_DIMENSIONS_PER_DATASET: {{ .Values.api.maxAllowedDimensionsPerDataset | quote }}
+  MAX_ALLOWED_LINES_PER_DATASET: {{ .Values.api.maxAllowedLinesPerDataset | quote }}

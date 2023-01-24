@@ -112,6 +112,16 @@ Define the default app env variables
                 configMapKeyRef:
                   name: avatar-config
                   key: PDFGENERATOR_URL
+            - name: MAX_ALLOWED_DIMENSIONS_PER_DATASET
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: MAX_ALLOWED_DIMENSIONS_PER_DATASET
+            - name: MAX_ALLOWED_LINES_PER_DATASET
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: MAX_ALLOWED_LINES_PER_DATASET
 {{- end }}
 
 {{/*

@@ -22,7 +22,7 @@ fi
 echo RELEASE_NAME="$release_name"
 echo NAMESPACE="$namespace"
 
-db_password=$(python -c "import secrets; print(secrets.token_hex(), end='')")
+db_password=$(python3 -c "import secrets; print(secrets.token_hex(), end='')")
 db_user="${DB_USER-avatar}"
 db_name="${DB_NAME-avatar}"
 
@@ -40,7 +40,7 @@ worker_memory_request="4Gi"
 api_memory_request="1Gi"
 pdfgenerator_memory_request="2Gi"
 
-worker_cpu_request="2000m"
+worker_cpu_request="1000m"
 api_cpu_request="512m"
 pdfgenerator_cpu_request="512m"
 
@@ -52,7 +52,7 @@ echo USE_EMAIL_AUTH="$use_email_auth"
 if [ "$use_email_auth" = "false" ]; then
       ## Authentication with username and password
       first_user_name="${FIRST_USER_NAME-avatar_admin}"
-      generated_password=$(python -c "import secrets; print(secrets.token_hex(), end='')")
+      generated_password=$(python3 -c "import secrets; print(secrets.token_hex(), end='')")
       first_user_password="${FIRST_USER_PASSWORD-$generated_password}"
       echo FIRST_USER_NAME="$first_user_name"
       echo FIRST_USER_PASSWORD="$first_user_password"
@@ -135,9 +135,9 @@ cmd=(helm "$subcommand" --debug "$release_name" ./helm-chart --namespace "$names
       --set dbUser="$db_user" \
       --set dbHost="$postgres_host" \
       --set redisHost="$redis_host" \
-      --set api.pepper=$(python -c "import secrets; print(secrets.token_hex(), end='')") \
-      --set api.authjwtSecretKey=$(python -c "import secrets; print(secrets.token_hex(), end='')") \
-      --set api.fileEncryptionKey=$(python -c "import base64; import os; print(str(base64.urlsafe_b64encode(os.urandom(32)), encoding='utf-8'), end='')") \
+      --set api.pepper=$(python3 -c "import secrets; print(secrets.token_hex(), end='')") \
+      --set api.authjwtSecretKey=$(python3 -c "import secrets; print(secrets.token_hex(), end='')") \
+      --set api.fileEncryptionKey=$(python3 -c "import base64; import os; print(str(base64.urlsafe_b64encode(os.urandom(32)), encoding='utf-8'), end='')") \
       --set avatarVersion="$avatar_version" \
       --set pdfgeneratorVersion="$pdfgenerator_version" \
       --set api.useEmailAuthentication="$use_email_auth" \

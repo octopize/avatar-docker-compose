@@ -28,7 +28,7 @@ db_name="${DB_NAME-avatar}"
 
 avatar_version="${AVATAR_VERSION-latest}"
 pdfgenerator_version="${PDFGENERATOR_VERSION-latest}"
-use_email_auth="${USE_EMAIL_AUTH-false}"
+use_email_auth="${USE_EMAIL_AUTHENTICATION-false}"
 is_telemetry_enabled="false"
 is_sentry_enabled="false"
 organization_name="${ORGANIZATION_NAME-octopize}"
@@ -46,7 +46,7 @@ pdfgenerator_cpu_request="512m"
 
 echo AVATAR_VERSION="$avatar_version"
 echo PDFGENERATOR_VERSION="$pdfgenerator_version"
-echo USE_EMAIL_AUTH="$use_email_auth"
+echo USE_EMAIL_AUTHENTICATION="$use_email_auth"
 
 
 if [ "$use_email_auth" = "false" ]; then

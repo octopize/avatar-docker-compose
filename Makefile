@@ -5,19 +5,23 @@ SHELL := bash
 MAKEFLAGS += --warn-undefined-variables
 MAKEFLAGS += --no-builtin-rules
 
+##@ Local
+
 install:  ## Install the stack
 	@echo "TODO"
 .PHONY: install
+
+##@ Helm
 
 lint:  ## Lint the files
 	helm lint ./helm-chart
 .PHONY: lint
 
-render-helm:
+render-helm:  ## Render Helm template
 	helm template releasename ./helm-chart --debug
 .PHONY: render-helm
 
-start-helm-local:
+start-helm-local: ## Start stack with Redis, DB, and Avatar Helm charts on minikube
 	### Typical usage ###
 	## Create the whole stack from scratch
 	# make start-helm-local
@@ -27,7 +31,7 @@ start-helm-local:
 	bash launch_helm.sh
 .PHONY: start-helm-local
 
-stop-helm-local:
+stop-helm-local:  ## Stop minikube stack
 	test -n "$(NAMESPACE)"
 	test -n "$(RELEASE_NAME)"
 	helm uninstall "$(RELEASE_NAME)-postgres" --namespace "$(NAMESPACE)"

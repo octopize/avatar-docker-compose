@@ -20,7 +20,7 @@ spec:
         - name: avatar-cron
           image: quay.io/octopize/api:{{ .Values.avatarVersion }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["celery", "-A", "api.lib.task", "beat", "--loglevel=info"]
+          command: ["celery", "-A", "api.lib.task", "beat", "--loglevel=info", "-s", "/tmp/celerybeat-schedule"]
           resources:
             requests:
               memory: "256Mi"

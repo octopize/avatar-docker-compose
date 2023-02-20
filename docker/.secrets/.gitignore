@@ -1,0 +1,5 @@
+# Ignore the contents of the directory but keep the directory versioned
+*
+!*/
+!.gitignore
+!.gitkeep

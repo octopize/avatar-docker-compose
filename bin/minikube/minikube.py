@@ -1,3 +1,5 @@
+from toolz.dicttoolz import dissoc
+import functools
 import json
 import time
 from typing import Optional, cast
@@ -56,7 +58,6 @@ class InvalidConfig(Exception):
 
 
 class Authentication(BaseModel):
-    password: str
     kind: AuthKind
 
 
@@ -70,6 +71,7 @@ class EmailAuthentication(Authentication):
 
 class UsernameAuthentication(Authentication):
     kind: AuthKind = AuthKind.USERNAME
+    password: str
     username: str
 
 
@@ -105,23 +107,23 @@ class AvatarHelmConfig(HelmConfig):
     postgres_host: str
     redis_host: str
 
-    avatar_version: str = DEFAULT_AVATAR_VERSION
-    api_base_url: str = DEFAULT_API_BASE_URL
+    api_base_url: str
+    avatar_version: str
 
-    organization_name: str = DEFAULT_ORGANIZATION_NAME
+    organization_name: str
     authentication: Authentication
 
-    is_telemetry_enabled: bool = DEFAULT_IS_TELEMETRY_ENABLED
-    is_sentry_enabled: bool = DEFAULT_IS_SENTRY_ENABLED
+    is_telemetry_enabled: bool
+    is_sentry_enabled: bool
 
-    pdfgenerator_version: str = DEFAULT_PDFGENERATOR_VERSION
+    pdfgenerator_version: str
 
-    worker_memory_request: str = DEFAULT_WORKER_MEMORY_REQUEST
-    api_memory_request: str = DEFAULT_API_MEMORY_REQUEST
-    pdfgenerator_memory_request: str = DEFAULT_PDFGENERATOR_MEMORY_REQUEST
-    worker_cpu_request: str = DEFAULT_WORKER_CPU_REQUEST
-    api_cpu_request: str = DEFAULT_API_CPU_REQUEST
-    pdfgenerator_cpu_request: str = DEFAULT_PDFGENERATOR_CPU_REQUEST
+    worker_memory_request: str
+    api_memory_request: str
+    pdfgenerator_memory_request: str
+    worker_cpu_request: str
+    api_cpu_request: str
+    pdfgenerator_cpu_request: str
 
 
 class Result(BaseModel):
@@ -131,23 +133,23 @@ class Result(BaseModel):
 
 
 class AvatarResult(Result):
-    avatar_version: str = DEFAULT_AVATAR_VERSION
-    api_base_url: str = DEFAULT_API_BASE_URL
+    avatar_version: str
+    api_base_url: str
 
-    organization_name: str = DEFAULT_ORGANIZATION_NAME
-    authentication: Authentication
+    organization_name: str
+    authentication: EmailAuthentication | UsernameAuthentication
 
-    is_telemetry_enabled: bool = DEFAULT_IS_TELEMETRY_ENABLED
-    is_sentry_enabled: bool = DEFAULT_IS_SENTRY_ENABLED
+    is_telemetry_enabled: bool
+    is_sentry_enabled: bool
 
-    pdfgenerator_version: str = DEFAULT_PDFGENERATOR_VERSION
+    pdfgenerator_version: str
 
-    worker_memory_request: str = DEFAULT_WORKER_MEMORY_REQUEST
-    api_memory_request: str = DEFAULT_API_MEMORY_REQUEST
-    pdfgenerator_memory_request: str = DEFAULT_PDFGENERATOR_MEMORY_REQUEST
-    worker_cpu_request: str = DEFAULT_WORKER_CPU_REQUEST
-    api_cpu_request: str = DEFAULT_API_CPU_REQUEST
-    pdfgenerator_cpu_request: str = DEFAULT_PDFGENERATOR_CPU_REQUEST
+    worker_memory_request: str
+    api_memory_request: str
+    pdfgenerator_memory_request: str
+    worker_cpu_request: str
+    api_cpu_request: str
+    pdfgenerator_cpu_request: str
 
 
 KEY_MAPPING = {
@@ -174,11 +176,17 @@ KEY_MAPPING = {
     "resources.pdfgeneratorCpuRequest": "pdfgenerator_cpu_request",
 }
 
-# "api.useEmailAuthentication": "api.useEmailAuthentication",  # TODO: Handle separately
-# "api.firstUserName": "api.firstUserName",  # TODO: Handle separately
-# "api.firstUserPassword": "api.firstUserPassword",  # TODO: Handle separately
-# "api.awsMailAccountAccessKeyId": "api.awsMailAccountAccessKeyId",  # TODO: Handle separately
-# "api.awsMailAccountSecretAccessKey": "api.awsMailAccountSecretAccessKey",  # TODO: Handle separately
+
+USER_AUTHENTICATION_KEY_MAPPING = {
+    "api.firstUserName": "username",
+    "api.firstUserPassword": "password",
+}
+
+EMAIL_AUTHENTICATION_KEY_MAPPING = {
+    "api.awsMailAccountAccessKeyId": "aws_mail_account_access_key_id",
+    "api.adminEmails": "admin_emails",
+    "api.awsMailAccountSecretAccessKey": "aws_mail_account_secret_access_key",
+}
 
 
 class PostgresResult(Result):
@@ -208,10 +216,10 @@ def get_key(result: Result):
     else:
         prefix = "avatar"
 
-    return f"{prefix}-{result.namespace}-{result.release_name}"
+    return f"{result.namespace}-{result.release_name}-{prefix}"
 
 
-def load_result(key: str) -> HelmConfig:
+def load_result(key: str) -> Result:
     filename = f"{key}.json"
 
     fullpath = SAVE_DIRECTORY / filename
@@ -238,19 +246,31 @@ def save_result(result: Result) -> None:
 
 
 @app.command()
-def create_release(
-    release_name: str = typer.Option(
-        ..., envvar="RELEASE_NAME", help="Suffix used for all the helm releases."
-    ),
-    namespace: str = typer.Option(
-        ...,
-        envvar="NAMESPACE",
-        help="Name of the Kubernetes namespace to deploy the release in.",
-    ),
+def create_cluster(
     docker_pull_secret: str = typer.Option(
         ...,
         envvar="DOCKER_PULL_SECRET",
-        help="Docker secret used to pull the images. Can be found on quay.io",
+        help="Docker secret used to pull the images. Can be found on quay.io or 1Password.",
+    ),
+    release_name: str = typer.Option(
+        None, envvar="RELEASE_NAME", help="Suffix used for all the helm releases."
+    ),
+    namespace: str = typer.Option(
+        None,
+        envvar="NAMESPACE",
+        help="Name of the Kubernetes namespace to deploy the release in.",
+    ),
+    avatar_version: str = typer.Option(
+        DEFAULT_AVATAR_VERSION, help="Version of the avatar API."
+    ),
+    pdfgenerator_version: str = typer.Option(
+        DEFAULT_PDFGENERATOR_VERSION, help="Version of the pdfgenerator."
+    ),
+    organization_name: str = typer.Option(
+        DEFAULT_ORGANIZATION_NAME, help="Name of the organization/tenant"
+    ),
+    api_base_url: str = typer.Option(
+        DEFAULT_API_BASE_URL, help="URL at which the API is accessible."
     ),
     aws_mail_account_access_key_id: Optional[str] = typer.Option(
         None,
@@ -263,29 +283,74 @@ def create_release(
         help="AWS Credentials used to send mail. Used if --use-email-authentication is set.",
     ),
     use_email_authentication: bool = typer.Option(
-        True,
+        False,
         "--use-email-authentication",
-        help="Flag to activate/deactivate email authentication.",
+        help="Flag to activate email authentication.",
     ),
     email: Optional[list[str]] = typer.Option(
-        None, help="Used if --use-email-authentication is set."
+        None, help=
+        """Emails for the admins. Used if --use-email-authentication is set.\n\n"""
+        """Can be used multiple times: e.g. --email mail1@octopize.io --email mail2@octopize.io will create 2 admin accounts."""
     ),
-    username: Optional[str] = typer.Option(
-        None, help="Used if --use-email-authentication is NOT set."
+    username: str = typer.Option(
+        DEFAULT_USERNAME,
+        help="Username of the admin. Used if --use-email-authentication is NOT set.",
     ),
-    password: str = typer.Option(..., help="Password for the emails or username."),
+    password: str = typer.Option(
+        None,
+        help="Password for the admin. Required if --use-email-authentication is NOT set. Used only with username.",
+    ),
     db_name: str = typer.Option(DEFAULT_DB_NAME),
     db_user: str = typer.Option(DEFAULT_DB_NAME),
     db_password: str = typer.Option(None),
+    is_telemetry_enabled: bool = typer.Option(
+        DEFAULT_IS_TELEMETRY_ENABLED,
+        "--enable-telemetry",
+        help="Whether or not telemetry is enabled.",
+    ),
+    is_sentry_enabled: bool = typer.Option(
+        DEFAULT_IS_SENTRY_ENABLED,
+        "--enable-sentry",
+        help="Whether or not error monitoring using Sentry is enabled.",
+    ),
+    worker_memory_request: str = typer.Option(
+        DEFAULT_WORKER_MEMORY_REQUEST,
+        help="Amount of memory to allocate to a avatar-worker pod.",
+    ),
+    api_memory_request: str = typer.Option(
+        DEFAULT_API_MEMORY_REQUEST,
+        help="Amount of memory to allocate to a avatar-api pod.",
+    ),
+    pdfgenerator_memory_request: str = typer.Option(
+        DEFAULT_PDFGENERATOR_MEMORY_REQUEST,
+        help="Amount of memory to allocate to a avatar-pdfgenerator pod.",
+    ),
+    worker_cpu_request: str = typer.Option(
+        DEFAULT_WORKER_CPU_REQUEST,
+        help="Amount of CPU to allocate to a avatar-worker pod.",
+    ),
+    api_cpu_request: str = typer.Option(
+        DEFAULT_API_CPU_REQUEST, help="Amount of CPU to allocate to a avatar-api pod."
+    ),
+    pdfgenerator_cpu_request: str = typer.Option(
+        DEFAULT_PDFGENERATOR_CPU_REQUEST,
+        help="Amount of CPU to allocate to a avatar-pdfgenerator pod.",
+    ),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ) -> None:
-    
+    """Create a complete cluster able to run the Avatar API"""
+
+    namespace = namespace or f"avatar-ns-{secrets.token_hex(2)}"
+    release_name = release_name or f"avatar"
+    password = password or secrets.token_hex(16)
+
     verify_authentication(
         use_email_authentication,
         aws_mail_account_access_key_id=aws_mail_account_access_key_id,
         aws_mail_account_secret_access_key=aws_mail_account_secret_access_key,
         emails=email,
         username=username,
+        password=password,
     )
 
     postgres_result = create_postgres(
@@ -304,21 +369,38 @@ def create_release(
         release_name=release_name,
         namespace=namespace,
         docker_pull_secret=docker_pull_secret,
+        avatar_version=avatar_version,
+        api_base_url=api_base_url,
+        pdfgenerator_version=pdfgenerator_version,
         aws_mail_account_access_key_id=aws_mail_account_access_key_id,
         aws_mail_account_secret_access_key=aws_mail_account_secret_access_key,
         use_email_authentication=use_email_authentication,
         email=email,
         username=username,
         password=password,
+        organization_name=organization_name,
+        is_telemetry_enabled=is_telemetry_enabled,
+        is_sentry_enabled=is_sentry_enabled,
+        worker_memory_request=worker_memory_request,
+        api_memory_request=api_memory_request,
+        pdfgenerator_memory_request=pdfgenerator_memory_request,
+        worker_cpu_request=worker_cpu_request,
+        api_cpu_request=api_cpu_request,
+        pdfgenerator_cpu_request=pdfgenerator_cpu_request,
         db_host=postgres_result.db_host,
+        db_user=postgres_result.db_user,
         db_name=postgres_result.db_name,
         db_password=postgres_result.db_password,
         redis_host=redis_result.redis_host,
         is_debug=is_debug,
+        should_upgrade_only=False,
     )
 
-    print(avatar_config)
-
+    typer.echo("Cluster setup complete")
+    typer.echo(
+        """You can find all the values that were setup in the build folder, """
+               f"""with the {namespace}-{release_name} prefix"""
+        )
     raise typer.Exit(0)
 
 
@@ -337,6 +419,8 @@ def create_postgres(
     db_password: str = typer.Option(None),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ) -> PostgresResult:
+    """Create a postgres database setup to run the Avatar API"""
+
     if not is_minikube_running():
         typer.echo("Minikube must be running. Run with 'minikube start'.")
         raise typer.Abort()
@@ -367,8 +451,6 @@ def create_postgres(
         "--set",
         f"auth.password={config.db_password}",
     ]
-
-    save_result(config)
 
     install_postgres = [
         "helm",
@@ -443,7 +525,7 @@ def create_postgres(
 
     typer.echo("Database setup!")
     postgres_host = f"{postgres_release}-postgresql.{namespace}.svc.cluster.local"
-    return PostgresResult(
+    postgres_result = PostgresResult(
         release_name=release_name,
         namespace=namespace,
         db_host=postgres_host,
@@ -452,6 +534,9 @@ def create_postgres(
         db_user=config.db_name,
     )
 
+    save_result(postgres_result)
+    return postgres_result
+
 
 @app.command()
 def create_redis(
@@ -459,6 +544,8 @@ def create_redis(
     namespace: str = typer.Option(..., envvar="NAMESPACE"),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ) -> RedisResult:
+    """Create a redis message queue setup to run the Avatar API"""
+
     if not is_minikube_running():
         typer.echo("Minikube must be running. Run with 'minikube start'.")
         raise typer.Abort()
@@ -524,39 +611,87 @@ def create_avatar(
     docker_pull_secret: str = typer.Option(
         ...,
         envvar="DOCKER_PULL_SECRET",
-        help="Docker secret used to pull the images. Can be found on quay.io",
+        help="Docker secret used to pull the images. Can be found on quay.io or 1Password.",
+    ),
+    avatar_version: str = typer.Option(
+        DEFAULT_AVATAR_VERSION, help="Version of the avatar API."
+    ),
+    pdfgenerator_version: str = typer.Option(
+        DEFAULT_PDFGENERATOR_VERSION, help="Version of the pdfgenerator."
+    ),
+    api_base_url: str = typer.Option(
+        DEFAULT_API_BASE_URL, help="URL at which the API is accessible."
+    ),
+    organization_name: str = typer.Option(
+        DEFAULT_ORGANIZATION_NAME, help="Name of the organization/tenant"
     ),
     aws_mail_account_access_key_id: Optional[str] = typer.Option(
         None,
         envvar="AWS_ACCESS_KEY_ID",
-        help="AWS Credentials used to send mail. Used if --use-email-authentication is set.",
+        help="AWS Credentials used to send mail. Required if --use-email-authentication is set.",
     ),
     aws_mail_account_secret_access_key: Optional[str] = typer.Option(
         None,
         envvar="AWS_SECRET_ACCESS_KEY",
-        help="AWS Credentials used to send mail. Used if --use-email-authentication is set.",
+        help="AWS Credentials used to send mail. Required if --use-email-authentication is set.",
     ),
     use_email_authentication: bool = typer.Option(
-        True,
+        False,
         "--use-email-authentication",
         help="Flag to activate/deactivate email authentication.",
     ),
     email: Optional[list[str]] = typer.Option(
-        None, help="Used if --use-email-authentication is set."
+        None, help="Required if --use-email-authentication is set."
     ),
     username: Optional[str] = typer.Option(
-        None, help="Used if --use-email-authentication is NOT set."
+        None, help="Required if --use-email-authentication is NOT set."
     ),
-    password: str = typer.Option(..., help="Password for the emails or username."),
+    password: str = typer.Option(
+        None,
+        help="Password for the username. Required is --use-email-authentication is NOT set.",
+    ),
     redis_host: str = typer.Option(
-        ..., help="Name of the host where a Redis instance if running."
+        ..., help="Name of the host where a Redis instance is running."
     ),
     db_host: str = typer.Option(
-        ..., help="Name of the host where a Database instance if running."
+        ..., help="Name of the host where a Database instance is running."
     ),
     db_password: str = typer.Option(...),
     db_user: str = typer.Option(DEFAULT_DB_NAME),
     db_name: str = typer.Option(DEFAULT_DB_NAME),
+    is_telemetry_enabled: bool = typer.Option(
+        DEFAULT_IS_TELEMETRY_ENABLED,
+        "--enable-telemetry",
+        help="Whether or not telemetry is enabled.",
+    ),
+    is_sentry_enabled: bool = typer.Option(
+        DEFAULT_IS_SENTRY_ENABLED,
+        "--enable-sentry",
+        help="Whether or not error monitoring using Sentry is enabled.",
+    ),
+    worker_memory_request: str = typer.Option(
+        DEFAULT_WORKER_MEMORY_REQUEST,
+        help="Amount of memory to allocate to a avatar-worker pod.",
+    ),
+    api_memory_request: str = typer.Option(
+        DEFAULT_API_MEMORY_REQUEST,
+        help="Amount of memory to allocate to a avatar-api pod.",
+    ),
+    pdfgenerator_memory_request: str = typer.Option(
+        DEFAULT_PDFGENERATOR_MEMORY_REQUEST,
+        help="Amount of memory to allocate to a avatar-pdfgenerator pod.",
+    ),
+    worker_cpu_request: str = typer.Option(
+        DEFAULT_WORKER_CPU_REQUEST,
+        help="Amount of CPU to allocate to a avatar-worker pod.",
+    ),
+    api_cpu_request: str = typer.Option(
+        DEFAULT_API_CPU_REQUEST, help="Amount of CPU to allocate to a avatar-api pod."
+    ),
+    pdfgenerator_cpu_request: str = typer.Option(
+        DEFAULT_PDFGENERATOR_CPU_REQUEST,
+        help="Amount of CPU to allocate to a avatar-pdfgenerator pod.",
+    ),
     should_upgrade_only: bool = typer.Option(
         False,
         "--upgrade-only",
@@ -564,7 +699,11 @@ def create_avatar(
         """Can be useful if you forgot to change a single value and you don't want to create a brand new release.""",
     ),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
-) -> AvatarHelmConfig:
+) -> AvatarResult:
+    """ADVANCED. Use create-cluster if you're new to this.
+    Create the avatar component hosting the Avatar API.
+    """
+
     authentication = get_authentication(
         use_email_authentication=use_email_authentication,
         aws_mail_account_access_key_id=aws_mail_account_access_key_id,
@@ -574,7 +713,7 @@ def create_avatar(
         password=password,
     )
 
-    if not should_upgrade_only and not (not db_host or not redis_host):
+    if not should_upgrade_only and (not db_host or not redis_host):
         typer.echo(
             "Expected 'postgres_host' and 'redis_host' to have a value, but they have not."
         )
@@ -586,13 +725,25 @@ def create_avatar(
     config = AvatarHelmConfig(
         release_name=release_name,
         namespace=namespace,
+        api_base_url=api_base_url,
+        avatar_version=avatar_version,
         docker_pull_secret=docker_pull_secret,
-        authentication=authentication,
-        redis_host=redis_host,
-        postgres_host=db_host,
+        pdfgenerator_version=pdfgenerator_version,
         db_password=db_password,
         db_user=db_user,
         db_name=db_name,
+        postgres_host=db_host,
+        redis_host=redis_host,
+        organization_name=organization_name,
+        authentication=authentication,
+        is_telemetry_enabled=is_telemetry_enabled,
+        is_sentry_enabled=is_sentry_enabled,
+        worker_memory_request=worker_memory_request,
+        api_memory_request=api_memory_request,
+        pdfgenerator_memory_request=pdfgenerator_memory_request,
+        worker_cpu_request=worker_cpu_request,
+        api_cpu_request=api_cpu_request,
+        pdfgenerator_cpu_request=pdfgenerator_cpu_request,
     )
 
     is_mapping_correct = all(
@@ -603,36 +754,65 @@ def create_avatar(
             print(f"{attribute}: {hasattr(config, attribute)}")
         raise InvalidConfig("Some keys in KEY_MAPPING do not exist in the BaseModel.")
 
-    save_result(config)
+    avatar_result = AvatarResult.parse_obj(config.dict())
+    save_result(avatar_result)
 
     upgrade_or_install = "install" if not should_upgrade_only else "upgrade"
-    flags = "--debug --create-namespace"
-    namespace_command = f"--namespace {config.namespace}"
     avatar_release_name = f"{config.release_name}-avatar"
+    flags = ["--create-namespace", "--debug"]
+    namespace_command = ["--namespace", config.namespace]
 
-    values = [
-        f"--set {key}='{getattr(config,value)}'" for key, value in KEY_MAPPING.items()
-    ]
+    values = list(
+        chain.from_iterable(
+            ["--set", f"{key}={getattr(config,value)}"]
+            for key, value in KEY_MAPPING.items()
+        )
+    )
+
+    mapping = (
+        USER_AUTHENTICATION_KEY_MAPPING
+        if isinstance(authentication, UsernameAuthentication)
+        else EMAIL_AUTHENTICATION_KEY_MAPPING
+    )
+
+    authentication_values = list(
+        chain(
+            [
+                "--set",
+                f"api.useEmailAuthentication={str(use_email_authentication).lower()}",
+            ],
+            ["--set", f"api.adminEmails={{{','.join(email)}}}"]
+            if use_email_authentication
+            else [],
+            *(
+                ["--set", f"{key}={getattr(authentication, value)}"]
+                for key, value in dissoc(mapping, "api.adminEmails").items()
+            ),
+        )
+    )
 
     install_avatar = [
         "helm",
         upgrade_or_install,
         avatar_release_name,
+        str(HELM_CHART_PATH),
+        *namespace_command,
+        *flags,
         *values,
-        namespace_command,
-        flags,
+        *authentication_values,
     ]
 
     if should_upgrade_only:
-        typer.echo("Creating avatar Helm release...")
-    else:
         typer.echo("Updating avatar Helm release...")
+    else:
+        typer.echo("Creating avatar Helm release...")
 
     if is_debug:
         typer.echo(" ".join(install_avatar))
 
     result = subprocess.run(
         install_avatar,
+        text=True,
         stdout=subprocess.DEVNULL if not is_debug else None,
         stderr=subprocess.PIPE,
     )
@@ -645,12 +825,7 @@ def create_avatar(
             typer.echo("Could not create avatar Helm release :(")
         raise typer.Exit(result.returncode)
 
-    avatar_result = AvatarResult(
-        release_name=release_name,
-        namespace=namespace,
-    )
-    save_result(avatar_result)
-
+    typer.echo("Avatar release setup!")
     return avatar_result
 
 
@@ -661,25 +836,26 @@ def verify_authentication(
     aws_mail_account_secret_access_key: Optional[str],
     emails: list[str] | None,
     username: Optional[str],
+    password: Optional[str],
 ) -> None:
     if use_email_authentication and not emails:
         typer.echo(
             "Expected at least one email as --use-email-authentication is selected."
         )
         raise typer.Abort()
-    elif not use_email_authentication and not username:
-        typer.echo(
-            "Expected an username as --use-email-authentication is not selected."
-        )
-        raise typer.Abort()
-
     elif use_email_authentication and (
         not aws_mail_account_access_key_id or not aws_mail_account_secret_access_key
     ):
         typer.echo("Expected AWS credentials for Simple Email Service.")
         raise typer.Abort()
+    elif not use_email_authentication and (not username or not password):
+        typer.echo(
+            "Expected an username and a password as --use-email-authentication is not selected."
+        )
+        raise typer.Abort()
     else:
         return None
+
 
 def get_authentication(
     use_email_authentication: bool,
@@ -690,29 +866,41 @@ def get_authentication(
     username: Optional[str],
     password: str,
 ) -> Authentication:
-
     verify_authentication(
         use_email_authentication,
         aws_mail_account_access_key_id=aws_mail_account_access_key_id,
         aws_mail_account_secret_access_key=aws_mail_account_secret_access_key,
         emails=emails,
         username=username,
+        password=password,
     )
 
     if use_email_authentication:
-        return EmailAuthentication(
+        auth = EmailAuthentication(
             admin_emails=cast(list[str], emails),
             aws_mail_account_access_key_id=cast(str, aws_mail_account_access_key_id),
             aws_mail_account_secret_access_key=cast(
                 str, aws_mail_account_secret_access_key
             ),
-            password=password,
         )
     else:
-        return UsernameAuthentication(
+        auth = UsernameAuthentication(
             username=cast(str, username),
             password=password,
         )
+
+    mapping = (
+        USER_AUTHENTICATION_KEY_MAPPING
+        if isinstance(auth, UsernameAuthentication)
+        else EMAIL_AUTHENTICATION_KEY_MAPPING
+    )
+    is_mapping_correct = all(hasattr(auth, attribute) for attribute in mapping.values())
+    if not is_mapping_correct:
+        for attribute in mapping.values():
+            print(f"{attribute}: {hasattr(auth, attribute)}")
+        raise InvalidConfig("Some keys in the mapping do not exist in the BaseModel.")
+
+    return auth
 
 
 if __name__ == "__main__":

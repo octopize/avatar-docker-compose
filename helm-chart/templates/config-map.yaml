@@ -21,3 +21,5 @@ data:
   USE_EMAIL_AUTHENTICATION: {{ .Values.api.useEmailAuthentication | default "false" | quote }}
   MAX_ALLOWED_DIMENSIONS_PER_DATASET: {{ .Values.api.maxAllowedDimensionsPerDataset | quote }}
   MAX_ALLOWED_LINES_PER_DATASET: {{ .Values.api.maxAllowedLinesPerDataset | quote }}
+  LOG_LEVEL: {{ .Values.api.logLevel | quote }}
+

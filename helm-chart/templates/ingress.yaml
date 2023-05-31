@@ -37,6 +37,7 @@ spec:
   redirectToHttps:
     enabled: true
 
+---
 
 
 apiVersion: networking.k8s.io/v1

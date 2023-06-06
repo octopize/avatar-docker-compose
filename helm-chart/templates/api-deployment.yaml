@@ -26,6 +26,8 @@ spec:
             - mountPath: /var/run/secrets
               name: secrets
               readOnly: true
+            - mountPath: "/home/avatar/shared"
+              name: avatar-pv-storage
           resources:
             requests:
               memory: {{ .Values.resources.apiMemoryRequest }}
@@ -76,3 +78,10 @@ spec:
         - name: secrets
           secret:
             secretName: api
+        - name: avatar-pv-storage
+          persistentVolumeClaim:
+            claimName: avatar-pv-claim
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsGroup: 1000

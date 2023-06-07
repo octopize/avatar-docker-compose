@@ -57,6 +57,8 @@ services:
       # - aws_mail_account_access_key_id
       # - aws_mail_account_secret_access_key
 
+      - clevercloud_sso_salt
+
   worker:
     image: quay.io/octopize/api:latest
     platform: linux/x86_64
@@ -95,6 +97,7 @@ services:
       - file_encryption_key
       - db_name
       - db_user
+      - clevercloud_sso_salt
 
   cron:
     image: quay.io/octopize/api:${AVATAR_API_VERSION}
@@ -187,6 +190,9 @@ secrets:
   #   file: ${SECRETS_DIR-.secrets}/aws_mail_account_access_key_id
   # aws_mail_account_secret_access_key:
   #   file: ${SECRETS_DIR-.secrets}/aws_mail_account_secret_access_key
+
+  clevercloud_sso_salt:
+    file: ${SECRETS_DIR-.secrets}/clevercloud_sso_salt
 
 volumes:
   caddy-data:

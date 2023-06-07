@@ -67,6 +67,9 @@ $(SECRETS_DIR)/aws_mail_account_secret_access_key:
 	mkdir -p $(SECRETS_DIR)
 	echo "" > $@
 
+$(SECRETS_DIR)/clevercloud_sso_salt:
+	mkdir -p $(SECRETS_DIR)
+	python3 -c "import secrets; print(secrets.token_hex())" > $@
 
 .DEFAULT_GOAL := help
 help: Makefile

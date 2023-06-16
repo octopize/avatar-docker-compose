@@ -26,8 +26,10 @@ spec:
             - mountPath: /var/run/secrets
               name: secrets
               readOnly: true
-            - mountPath: "/home/avatar/shared"
-              name: avatar-pv-storage
+          {{- if and .Values.debug.isDebugMode .Values.debug.useGCPStorage }}
+            - mountPath: /home/avatar/application_default_credentials.json
+              name: google-cloud-application-credentials
+          {{- end }}
           command: ["celery", "-A", "api.lib.task", "worker", "--loglevel=info"]
           resources:
             requests:
@@ -38,6 +40,13 @@ spec:
               cpu: {{ .Values.resources.workerCpuRequest }}
           env:
             {{- template "avatar.app_env" }}
+            {{- if and .Values.debug.isDebugMode .Values.debug.useGCPStorage }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/home/avatar/application_default_credentials.json"
+            - name: GOOGLE_CLOUD_PROJECT
+              value: {{ .Values.debug.googleCloudProject }}
+            {{- end }}
+
         {{- template "avatar.db_proxy" . }}
       imagePullSecrets:
         - name: docker-local-pull-secret
@@ -55,10 +64,9 @@ spec:
               path: db_password
             - key: file_encryption_key
               path: file_encryption_key
-        - name: avatar-pv-storage
-          persistentVolumeClaim:
-            claimName: avatar-pv-claim
-      securityContext:
-        fsGroup: 1000
-        runAsUser: 1000
-        runAsGroup: 1000
+      {{ if and .Values.debug.isDebugMode .Values.debug.useGCPStorage }}
+        - name: google-cloud-application-credentials
+          hostPath:
+            path: {{ .Values.debug.googleApplicationCredentialsFilename | quote }}
+            type: File
+      {{ end }}

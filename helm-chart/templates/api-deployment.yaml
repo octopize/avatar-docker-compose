@@ -26,8 +26,11 @@ spec:
             - mountPath: /var/run/secrets
               name: secrets
               readOnly: true
-            - mountPath: "/home/avatar/shared"
-              name: avatar-pv-storage
+          {{- if and .Values.debug.isDebugMode .Values.debug.useGCPStorage }}
+            - mountPath: /home/avatar/application_default_credentials.json
+              name: google-cloud-application-credentials
+          {{- end }}
+
           resources:
             requests:
               memory: {{ .Values.resources.apiMemoryRequest }}
@@ -47,6 +50,13 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: USE_EMAIL_AUTHENTICATION
+            {{- if and .Values.debug.isDebugMode .Values.debug.useGCPStorage }}
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/home/avatar/application_default_credentials.json"
+            - name: GOOGLE_CLOUD_PROJECT
+              value: {{ .Values.debug.googleCloudProject }}
+            {{- end }}
+
           ports:
             - name: api
               containerPort: 8000
@@ -78,10 +88,9 @@ spec:
         - name: secrets
           secret:
             secretName: api
-        - name: avatar-pv-storage
-          persistentVolumeClaim:
-            claimName: avatar-pv-claim
-      securityContext:
-        fsGroup: 1000
-        runAsUser: 1000
-        runAsGroup: 1000
+      {{ if and .Values.debug.isDebugMode .Values.debug.useGCPStorage }}
+        - name: google-cloud-application-credentials
+          hostPath:
+            path: {{ .Values.debug.googleApplicationCredentialsFilename | quote }}
+            type: File
+      {{ end }}

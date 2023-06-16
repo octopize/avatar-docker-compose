@@ -40,6 +40,10 @@ spec:
               cpu: {{ .Values.resources.workerCpuRequest }}
           env:
             {{- template "avatar.app_env" }}
+            {{ if .Values.debug.storage.useLocal }}
+            - name: USER_ID
+              value: "1000"
+            {{ end }}
         {{- template "avatar.db_proxy" . }}
       imagePullSecrets:
         - name: docker-local-pull-secret

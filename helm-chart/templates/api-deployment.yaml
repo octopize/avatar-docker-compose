@@ -49,6 +49,10 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: USE_EMAIL_AUTHENTICATION
+            {{ if .Values.debug.storage.useLocal }}
+            - name: USER_ID
+              value: "1000"
+            {{ end }}
           ports:
             - name: api
               containerPort: 8000

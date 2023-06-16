@@ -48,6 +48,12 @@ gcp:
   gsaEmail: ""
   dbInstanceConnectionName: ""
 
+debug:
+  isDebugMode: false
+  useGCPStorage: false
+  googleApplicationCredentialsFilename: ""
+  googleCloudProject: ""
+
 api:
   # Externally accessible API url (should be with https)
   baseUrl: https://avatar.yourcompany.com

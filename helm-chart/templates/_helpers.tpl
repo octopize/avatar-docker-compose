@@ -127,6 +127,8 @@ Define the default app env variables
                 configMapKeyRef:
                   name: avatar-config
                   key: LOG_LEVEL
+            - name: USER_ID
+              value: "1000"
 {{- end }}
 
 {{/*

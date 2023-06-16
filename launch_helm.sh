@@ -32,6 +32,7 @@ use_email_auth="${USE_EMAIL_AUTHENTICATION-false}"
 is_telemetry_enabled="false"
 is_sentry_enabled="false"
 organization_name="${ORGANIZATION_NAME-octopize}"
+shared_storage_path="${SHARED_STORAGE_PATH-}"
 single_admin_email="${SINGLE_ADMIN_EMAIL-}" # We only accept a single email locally to not make the script overly complicated.
 aws_mail_account_access_key_id="${AWS_MAIL_ACCOUNT_ACCESS_KEY_ID-}"
 aws_mail_account_secret_access_key="${AWS_MAIL_ACCOUNT_SECRET_ACCESS_KEY-}"
@@ -47,6 +48,7 @@ pdfgenerator_cpu_request="512m"
 echo AVATAR_VERSION="$avatar_version"
 echo PDFGENERATOR_VERSION="$pdfgenerator_version"
 echo USE_EMAIL_AUTHENTICATION="$use_email_auth"
+echo SHARED_STORAGE_PATH="$shared_storage_path"
 
 
 if [ "$use_email_auth" = "false" ]; then
@@ -144,6 +146,7 @@ cmd=(helm "$subcommand" --debug "$release_name" ./helm-chart --namespace "$names
       --set api.isTelemetryEnabled="$is_telemetry_enabled" \
       --set api.isSentryEnabled="$is_sentry_enabled" \
       --set api.organizationName="$organization_name" \
+      --set api.sharedStoragePath="$shared_storage_path" \
       --set resources.workerMemoryRequest="$worker_memory_request" \
       --set resources.apiMemoryRequest="$api_memory_request" \
       --set resources.pdfgeneratorMemoryRequest="$pdfgenerator_memory_request" \

@@ -21,6 +21,8 @@ spec:
       port: 8000
       targetPort: api
 
+
+{{ if .Values.gcp.useGCP }}
 ---
 
 # https://cloud.google.com/kubernetes-engine/docs/how-to/ingress-features#configuring_ingress_features_through_backendconfig_parameters
@@ -34,3 +36,4 @@ spec:
     enable: true
     sampleRate: 1
 
+{{ end }}

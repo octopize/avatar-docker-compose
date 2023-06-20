@@ -1,23 +1,20 @@
-from toolz.dicttoolz import dissoc
-import functools
-import json
-import time
-from typing import Any, Callable, List, Optional, cast
 import base64
+import json
 import os
 import secrets
 import subprocess
+import time
 from enum import Enum
 from itertools import chain
 from pathlib import Path
+from typing import Callable, Optional, cast
 
 import typer
 from pydantic import BaseModel
+from toolz.dicttoolz import dissoc
 
 app = typer.Typer()
 
-
-DEBUG = False
 
 GIT_ROOT = Path(
     subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
@@ -239,7 +236,7 @@ def load_result(key: str) -> Result:
         return RedisResult.parse_obj(json_)
     if key.startswith("avatar"):
         return AvatarResult.parse_obj(json_)
-    raise ValueError(f"Prefix does not exist.")
+    raise ValueError("Prefix does not exist.")
 
 
 def save_result(result: Result) -> None:
@@ -400,7 +397,7 @@ def create_cluster(
 
     namespace = namespace or f"avatar-ns-{secrets.token_hex(2)}"
     typer.echo(f"Using namespace={namespace}")
-    release_name = release_name or f"avatar"
+    release_name = release_name or "avatar"
     password = password or secrets.token_hex(16)
 
     verify_authentication(
@@ -424,7 +421,7 @@ def create_cluster(
         release_name=release_name, namespace=namespace, is_debug=is_debug
     )
 
-    avatar_config = create_avatar(
+    create_avatar(
         release_name=release_name,
         namespace=namespace,
         docker_pull_secret=docker_pull_secret,
@@ -650,7 +647,7 @@ def create_redis(
 
     if result.returncode != 0:
         typer.echo(result.stderr)
-        typer.echo(f"Could not initialize Redis :(")
+        typer.echo("Could not initialize Redis :(")
         raise typer.Exit(result.returncode)
 
     # Waiting for redis to be setup
@@ -684,7 +681,7 @@ def create_redis(
 
     do_retry(
         verify_status,
-        on_failure_message=f"Could not initialize database.",
+        on_failure_message="Could not initialize database.",
         sleep_for_seconds=10,
         is_debug=is_debug,
     )

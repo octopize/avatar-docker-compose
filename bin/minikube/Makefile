@@ -20,6 +20,21 @@ delete-namespaces: ## Delete all the 'avatar' namespaces
 	kubectl get namespaces --no-headers=true -o custom-columns=:metadata.name | grep avatar | xargs --no-run-if-empty kubectl delete namespace || exit 0
 .PHONY: delete-namespaces
 
+
+lint:  ## Run linting
+	poetry run flake8 *.py
+.PHONY: lint
+
+lint-fix:  ## Run autoformatters
+	poetry run black .
+	poetry run isort .
+.PHONY: lint-fix
+
+typecheck:  ## Run typechecking
+	poetry run mypy --show-error-codes --pretty --show-traceback api
+.PHONY: typecheck
+
+
 .DEFAULT_GOAL := help
 help: Makefile
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make \033[36m<target>\033[0m\n"} /^[\/\.a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)

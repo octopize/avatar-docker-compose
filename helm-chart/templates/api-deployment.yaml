@@ -26,6 +26,10 @@ spec:
             - mountPath: /var/run/secrets
               name: secrets
               readOnly: true
+          {{ if .Values.debug.storage.useLocal }}
+            - mountPath: {{ .Values.api.sharedStoragePath }}
+              name: avatar-pv-storage
+          {{ end }}
           resources:
             requests:
               memory: {{ .Values.resources.apiMemoryRequest }}
@@ -45,6 +49,10 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: USE_EMAIL_AUTHENTICATION
+            {{ if .Values.debug.storage.useLocal }}
+            - name: USER_ID
+              value: "1000"
+            {{ end }}
           ports:
             - name: api
               containerPort: 8000
@@ -76,3 +84,10 @@ spec:
         - name: secrets
           secret:
             secretName: api
+    {{ if .Values.debug.storage.useLocal }}
+        - name: avatar-pv-storage
+          persistentVolumeClaim:
+            claimName: avatar-pv-claim
+      securityContext:
+        runAsUser: 0
+    {{ end }}

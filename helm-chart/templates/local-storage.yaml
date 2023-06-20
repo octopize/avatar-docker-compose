@@ -1,0 +1,12 @@
+{{ if .Values.debug.storage.useLocal }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: avatar-pv-claim
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 3Gi
+{{ end }}

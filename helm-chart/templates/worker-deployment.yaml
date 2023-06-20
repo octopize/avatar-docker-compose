@@ -26,6 +26,10 @@ spec:
             - mountPath: /var/run/secrets
               name: secrets
               readOnly: true
+          {{ if .Values.debug.storage.useLocal }}
+            - mountPath: {{ .Values.api.sharedStoragePath }}
+              name: avatar-pv-storage
+          {{ end }}
           command: ["celery", "-A", "api.lib.task", "worker", "--loglevel=info"]
           resources:
             requests:
@@ -36,6 +40,10 @@ spec:
               cpu: {{ .Values.resources.workerCpuRequest }}
           env:
             {{- template "avatar.app_env" }}
+            {{ if .Values.debug.storage.useLocal }}
+            - name: USER_ID
+              value: "1000"
+            {{ end }}
         {{- template "avatar.db_proxy" . }}
       imagePullSecrets:
         - name: docker-local-pull-secret
@@ -53,3 +61,10 @@ spec:
               path: db_password
             - key: file_encryption_key
               path: file_encryption_key
+    {{ if .Values.debug.storage.useLocal }}
+        - name: avatar-pv-storage
+          persistentVolumeClaim:
+            claimName: avatar-pv-claim
+      securityContext:
+        runAsUser: 0
+    {{ end }}

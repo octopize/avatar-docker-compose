@@ -48,6 +48,10 @@ gcp:
   gsaEmail: ""
   dbInstanceConnectionName: ""
 
+debug:
+  storage:
+    useLocal: false
+
 api:
   # Externally accessible API url (should be with https)
   baseUrl: https://avatar.yourcompany.com

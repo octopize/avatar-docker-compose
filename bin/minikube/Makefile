@@ -16,6 +16,10 @@ cluster: ## Create a ready-to-go avatar cluster with default values
  	 poetry run python launch.py create-cluster
 .PHONY: cluster
 
+delete-namespaces: ## Delete all the 'avatar' namespaces
+	kubectl get namespaces --no-headers=true -o custom-columns=:metadata.name | grep avatar | xargs --no-run-if-empty kubectl delete namespace || exit 0
+.PHONY: delete-namespaces
+
 .DEFAULT_GOAL := help
 help: Makefile
 	@awk 'BEGIN {FS = ":.*##"; printf "Usage: make \033[36m<target>\033[0m\n"} /^[\/\.a-zA-Z_-]+:.*?##/ { printf "  \033[36m%-10s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)

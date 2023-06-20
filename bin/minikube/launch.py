@@ -2,7 +2,7 @@ from toolz.dicttoolz import dissoc
 import functools
 import json
 import time
-from typing import Optional, cast
+from typing import Any, Callable, List, Optional, cast
 import base64
 import os
 import secrets
@@ -33,7 +33,7 @@ class AuthKind(Enum):
 
 
 DEFAULT_AVATAR_VERSION = "latest"
-DEFAULT_API_BASE_URL = "http://api.octopize.local"
+DEFAULT_API_BASE_URL = "http://localhost:8000"
 
 DEFAULT_IS_SENTRY_ENABLED = False
 DEFAULT_IS_TELEMETRY_ENABLED = False
@@ -41,6 +41,8 @@ DEFAULT_IS_TELEMETRY_ENABLED = False
 DEFAULT_PDFGENERATOR_VERSION = "latest"
 DEFAULT_AUTHENTICATION_KIND = AuthKind.USERNAME
 DEFAULT_ORGANIZATION_NAME = "octopize"
+DEFAULT_SHARED_STORAGE_PATH = "/home/avatar/shared"
+DEFAULT_SHOULD_USE_LOCAL_STORAGE = True
 
 DEFAULT_DB_NAME = "avatar"
 
@@ -106,13 +108,13 @@ class AvatarHelmConfig(HelmConfig):
     db_name: str
     postgres_host: str
     redis_host: str
+    shared_storage_path: str
 
     api_base_url: str
     avatar_version: str
 
     organization_name: str
     authentication: Authentication
-
     is_telemetry_enabled: bool
     is_sentry_enabled: bool
 
@@ -168,6 +170,7 @@ KEY_MAPPING = {
     "api.isTelemetryEnabled": "is_telemetry_enabled",
     "api.isSentryEnabled": "is_sentry_enabled",
     "api.organizationName": "organization_name",
+    "api.sharedStoragePath": "shared_storage_path",
     "resources.workerMemoryRequest": "worker_memory_request",
     "resources.apiMemoryRequest": "api_memory_request",
     "resources.pdfgeneratorMemoryRequest": "pdfgenerator_memory_request",
@@ -245,6 +248,56 @@ def save_result(result: Result) -> None:
         f.write(result.json())
 
 
+def do_retry(
+    callable: Callable[[int, bool], None],  # should raise StopIteration
+    *,
+    on_success_message: Optional[str] = None,
+    on_failure_message: Optional[str] = None,
+    nb_retries: int = 5,
+    sleep_for_seconds: int = 5,
+    should_exit_on_failure: bool = True,
+    is_debug: bool = False,
+) -> None:
+    """Retry function, exit program if fails.
+
+    Parameters
+    ----------
+    callable :
+        Function to call. Should raise StopIteration on success.
+        Should return None on failure
+        Should have 2 parameters:
+            is_debug,
+            nb_attempts_left
+
+    Raises
+    ------
+    typer.Exit
+        Exit the program
+    """
+    current_try = 1
+    while current_try < nb_retries:
+        try:
+            callable(
+                nb_attempts_left=nb_retries - current_try,
+                is_debug=is_debug,
+            )
+        except StopIteration:
+            if on_success_message:
+                typer.echo(on_success_message)
+            return
+
+        time.sleep(sleep_for_seconds)
+
+        current_try += 1
+        typer.echo(f"Retrying... [{current_try}/{nb_retries}]")
+
+    if on_failure_message:
+        typer.echo(on_failure_message)
+
+    if should_exit_on_failure:
+        raise typer.Exit(1)
+
+
 @app.command()
 def create_cluster(
     docker_pull_secret: str = typer.Option(
@@ -288,9 +341,9 @@ def create_cluster(
         help="Flag to activate email authentication.",
     ),
     email: Optional[list[str]] = typer.Option(
-        None, help=
-        """Emails for the admins. Used if --use-email-authentication is set.\n\n"""
-        """Can be used multiple times: e.g. --email mail1@octopize.io --email mail2@octopize.io will create 2 admin accounts."""
+        None,
+        help="""Emails for the admins. Used if --use-email-authentication is set.\n\n"""
+        """Can be used multiple times: e.g. --email mail1@octopize.io --email mail2@octopize.io will create 2 admin accounts.""",
     ),
     username: str = typer.Option(
         DEFAULT_USERNAME,
@@ -303,6 +356,11 @@ def create_cluster(
     db_name: str = typer.Option(DEFAULT_DB_NAME),
     db_user: str = typer.Option(DEFAULT_DB_NAME),
     db_password: str = typer.Option(None),
+    shared_storage_path: str = typer.Option(
+        DEFAULT_SHARED_STORAGE_PATH,
+        help="""Path to storage that is shared between the API and worker pods."""
+        """This script only accepts a filesystem path storage, not a path to cloud storage.""",
+    ),
     is_telemetry_enabled: bool = typer.Option(
         DEFAULT_IS_TELEMETRY_ENABLED,
         "--enable-telemetry",
@@ -341,6 +399,7 @@ def create_cluster(
     """Create a complete cluster able to run the Avatar API"""
 
     namespace = namespace or f"avatar-ns-{secrets.token_hex(2)}"
+    typer.echo(f"Using namespace={namespace}")
     release_name = release_name or f"avatar"
     password = password or secrets.token_hex(16)
 
@@ -371,6 +430,7 @@ def create_cluster(
         docker_pull_secret=docker_pull_secret,
         avatar_version=avatar_version,
         api_base_url=api_base_url,
+        shared_storage_path=shared_storage_path,
         pdfgenerator_version=pdfgenerator_version,
         aws_mail_account_access_key_id=aws_mail_account_access_key_id,
         aws_mail_account_secret_access_key=aws_mail_account_secret_access_key,
@@ -397,10 +457,10 @@ def create_cluster(
     )
 
     typer.echo("Cluster setup complete")
+    filename = f"{namespace}-{release_name}-*.json"
     typer.echo(
-        """You can find all the values that were setup in the build folder, """
-               f"""with the {namespace}-{release_name} prefix"""
-        )
+        f"""You can find all the values that were setup in {SAVE_DIRECTORY / filename}"""
+    )
     raise typer.Exit(0)
 
 
@@ -503,27 +563,32 @@ def create_postgres(
     if is_debug:
         typer.echo(" ".join(create_database))
 
-    nb_max_retries = 5
-    nb_retries = 0
-    return_code = 1
-    while return_code != 0 and nb_retries <= nb_max_retries:
-        time.sleep(10)
-        should_print_stderr = nb_retries == (nb_max_retries - 1)
+    def initialize_database(
+        *, is_debug: bool = False, nb_attempts_left: Optional[int] = None
+    ) -> None:
+        should_print_stderr = nb_attempts_left == 0 if nb_attempts_left else False
         result = subprocess.run(
             create_database,
             stdout=subprocess.DEVNULL if not is_debug else None,
             stderr=subprocess.DEVNULL if not should_print_stderr else subprocess.PIPE,
         )
+
         return_code = result.returncode
-        nb_retries += 1
-        typer.echo(f"Retrying... [{nb_retries}/{nb_max_retries}]")
 
-    if return_code != 0:
-        typer.echo(result.stderr)
-        typer.echo(f"Could not initialize database after {nb_max_retries} attempts :(")
-        raise typer.Exit(return_code)
+        if return_code == 0:
+            raise StopIteration
 
-    typer.echo("Database setup!")
+        if should_print_stderr:
+            typer.echo(result.stderr)
+
+    do_retry(
+        initialize_database,
+        on_success_message="Database setup!",
+        on_failure_message="Could not initialize database",
+        sleep_for_seconds=15,
+        is_debug=is_debug,
+    )
+
     postgres_host = f"{postgres_release}-postgresql.{namespace}.svc.cluster.local"
     postgres_result = PostgresResult(
         release_name=release_name,
@@ -588,6 +653,42 @@ def create_redis(
         typer.echo(f"Could not initialize Redis :(")
         raise typer.Exit(result.returncode)
 
+    # Waiting for redis to be setup
+    def verify_status(
+        *, is_debug: bool = False, nb_attempts_left: Optional[int] = None
+    ) -> None:
+        get_pod_json = [
+            "kubectl",
+            "get",
+            "pod",
+            f"{redis_release}-master-0",
+            "--namespace",
+            namespace,
+            "-o",
+            "json",
+        ]
+
+        get_container_status = [
+            "jq",
+            ".status.containerStatuses[0].ready",
+        ]
+
+        get_json_process = subprocess.Popen(get_pod_json, stdout=subprocess.PIPE)
+        return_value = subprocess.check_output(
+            get_container_status, stdin=get_json_process.stdout, text=True
+        )
+        get_json_process.wait()
+
+        if return_value.strip() == "true":
+            raise StopIteration
+
+    do_retry(
+        verify_status,
+        on_failure_message=f"Could not initialize database.",
+        sleep_for_seconds=10,
+        is_debug=is_debug,
+    )
+
     typer.echo("Redis setup!")
 
     redis_host = f"{redis_release}-master.{namespace}.svc.cluster.local"
@@ -621,6 +722,11 @@ def create_avatar(
     ),
     api_base_url: str = typer.Option(
         DEFAULT_API_BASE_URL, help="URL at which the API is accessible."
+    ),
+    shared_storage_path: str = typer.Option(
+        DEFAULT_SHARED_STORAGE_PATH,
+        help="""Path to storage that is shared between the API and worker pods."""
+        """This script only accepts a filesystem path storage, not a path to cloud storage.""",
     ),
     organization_name: str = typer.Option(
         DEFAULT_ORGANIZATION_NAME, help="Name of the organization/tenant"
@@ -704,6 +810,11 @@ def create_avatar(
     Create the avatar component hosting the Avatar API.
     """
 
+    if not shared_storage_path.startswith("/"):
+        raise InvalidConfig(
+            "Only absolute filesystem paths are allowed for file storage, no URL to cloud storage."
+        )
+
     authentication = get_authentication(
         use_email_authentication=use_email_authentication,
         aws_mail_account_access_key_id=aws_mail_account_access_key_id,
@@ -729,6 +840,7 @@ def create_avatar(
         avatar_version=avatar_version,
         docker_pull_secret=docker_pull_secret,
         pdfgenerator_version=pdfgenerator_version,
+        shared_storage_path=shared_storage_path,
         db_password=db_password,
         db_user=db_user,
         db_name=db_name,
@@ -761,6 +873,7 @@ def create_avatar(
     avatar_release_name = f"{config.release_name}-avatar"
     flags = ["--create-namespace", "--debug"]
     namespace_command = ["--namespace", config.namespace]
+    using_local_storage = ["--set", "debug.storage.useLocal=true"]
 
     values = list(
         chain.from_iterable(
@@ -799,6 +912,7 @@ def create_avatar(
         *namespace_command,
         *flags,
         *values,
+        *using_local_storage,
         *authentication_values,
     ]
 
@@ -824,6 +938,37 @@ def create_avatar(
         else:
             typer.echo("Could not create avatar Helm release :(")
         raise typer.Exit(result.returncode)
+
+    def verify_api_health(
+        *, is_debug: bool = False, nb_attempts_left: Optional[int] = None
+    ):
+        should_print_stderr = nb_attempts_left == 0 if nb_attempts_left else False
+        result = subprocess.run(
+            ["curl", "localhost:8000/health"],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL if not should_print_stderr else subprocess.PIPE,
+        )
+        if "ok" in result.stdout:
+            raise StopIteration
+
+        if result.returncode != 0 and should_print_stderr:
+            typer.echo(result.stderr)
+
+    time.sleep(15)  # wait for the pod to be running, TODO: could be optimized
+    typer.echo("Port forwarding port 8000 from API to host.")
+    result = subprocess.Popen(
+        ["kubectl", "port-forward", "-n", namespace, "service/avatar-api", "8000:8000"],
+        close_fds=True,
+    )
+
+    do_retry(
+        verify_api_health,
+        on_failure_message="API is not yet healthy",
+        on_success_message="You can now connect to the API from your machine at localhost:8000",
+        should_exit_on_failure=False,
+        is_debug=is_debug,
+    )
 
     typer.echo("Avatar release setup!")
     return avatar_result

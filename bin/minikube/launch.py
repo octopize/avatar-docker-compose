@@ -479,7 +479,7 @@ def create_postgres(
     """Create a postgres database setup to run the Avatar API"""
 
     if not is_minikube_running():
-        typer.echo("Minikube must be running. Run with 'minikube start'.")
+        typer.echo("Minikube is not running. Use 'minikube start' to run it.")
         raise typer.Abort()
 
     config = PostgresHelmConfig(

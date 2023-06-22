@@ -823,10 +823,10 @@ def create_avatar(
 
     if not should_upgrade_only and (not db_host or not redis_host):
         typer.echo(
-            "Expected 'postgres_host' and 'redis_host' to have a value, but they have not."
+            f"Expected 'db_host' and 'redis_host' to have a value, but got {db_host=} and {redis_host=}."
         )
         typer.echo(
-            "Consider running 'python minikube.by create-postgres' and 'python minikube create-redis' beforehand"
+            "Consider running 'python launch.py create-postgres' and 'python launch.py create-redis' beforehand"
         )
         raise typer.Abort()
 

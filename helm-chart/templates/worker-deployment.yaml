@@ -10,7 +10,7 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: worker
-  replicas: 1
+  replicas: 2
   template:
     metadata:
       labels:
@@ -30,7 +30,7 @@ spec:
             - mountPath: {{ .Values.api.sharedStoragePath }}
               name: avatar-pv-storage
           {{ end }}
-          command: ["celery", "-A", "api.lib.task", "worker", "--loglevel=info"]
+          command: ["celery", "-A", "api.lib.task", "worker", "--loglevel=info", "--concurrency=4"]
           resources:
             requests:
               memory: {{ .Values.resources.workerMemoryRequest }}

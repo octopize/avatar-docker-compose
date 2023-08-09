@@ -148,6 +148,7 @@ services:
     environment:
       BASE_API_URL: ${BASE_API_URL}
       WEB_CLIENT_URL: ${WEB_CLIENT_URL}
+      CADDY_TLS_CONFIG: ${CADDY_TLS_CONFIG}
     volumes:
       - caddy-data:/data
       - caddy-config:/config

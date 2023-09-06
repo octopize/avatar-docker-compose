@@ -307,7 +307,7 @@ def do_retry(
 @app.command()
 def delete_cluster(
     release_name_prefix: str = typer.Option(
-        ..., envvar="RELEASE_NAME", help="Suffix used for all the helm releases."
+        ..., envvar="RELEASE_NAME", help="Prefix used for all the helm releases."
     ),
     namespace: str = typer.Option(
         ...,
@@ -384,7 +384,7 @@ def create_cluster(
         help="Docker secret used to pull the images. Can be found on quay.io or 1Password.",
     ),
     release_name_prefix: str = typer.Option(
-        None, envvar="RELEASE_NAME", help="Suffix used for all the helm releases."
+        None, envvar="RELEASE_NAME", help="Prefix used for all the helm releases."
     ),
     namespace: str = typer.Option(
         None,
@@ -547,7 +547,7 @@ def create_cluster(
 @app.command()
 def create_postgres(
     release_name_prefix: str = typer.Option(
-        ..., envvar="RELEASE_NAME", help="Suffix used for all the helm releases."
+        ..., envvar="RELEASE_NAME", help="Prefix used for all the helm releases."
     ),
     namespace: str = typer.Option(
         ...,
@@ -782,7 +782,7 @@ def create_redis(
 @app.command()
 def create_avatar(
     release_name_prefix: str = typer.Option(
-        ..., envvar="RELEASE_NAME", help="Suffix used for all the helm releases."
+        ..., envvar="RELEASE_NAME", help="Prefix used for all the helm releases."
     ),
     namespace: str = typer.Option(
         ...,

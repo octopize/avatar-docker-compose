@@ -9,37 +9,36 @@ MAKEFLAGS += --no-builtin-rules
 
 install:  ## Install the stack
 	@echo "TODO"
+	npm install -g yaml-lint
 .PHONY: install
 
 ##@ Helm
 
 lint:  ## Lint the files
-	helm lint ./helm-chart
+	helm template avatar-release ./helm-chart --debug 2> /dev/null | tee /tmp/to_lint.yaml | yamllint /tmp/to_lint.yaml
 .PHONY: lint
 
 render-helm:  ## Render Helm template
-	helm template releasename ./helm-chart --debug
+	helm template avatar-release ./helm-chart --debug
 .PHONY: render-helm
 
-start-helm-local: ## Start stack with Redis, DB, and Avatar Helm charts on minikube
-	### Typical usage ###
-	## Create the whole stack from scratch
-	# make start-helm-local
-	## Update only the running avatar release
-	# ONLY_AVATAR="true" UPGRADE="true" make start-helm-local
+
+install-helm: minikube  ## Install Helm template
+	helm install avatar-release ./helm-chart --debug --namespace avatar-release --create-namespace --values helm-chart/values.yaml
+.PHONY: install-helm
+
+uninstall-helm:  ## Uninstall Helm template
+	helm uninstall avatar-release --namespace avatar-release
+.PHONY: uninstall-helm
+
+minikube: ## Start minikube. Noop if already started.
 	minikube status 1> /dev/null || minikube start
-	bash launch_helm.sh
-.PHONY: start-helm-local
+.PHONY: minikube
 
-stop-helm-local:  ## Stop minikube stack
+delete-namespace:
 	test -n "$(NAMESPACE)"
-	test -n "$(RELEASE_NAME)"
-	helm uninstall "$(RELEASE_NAME)-postgres" --namespace "$(NAMESPACE)"
-	helm uninstall "$(RELEASE_NAME)-redis" --namespace "$(NAMESPACE)"
-	helm uninstall "$(RELEASE_NAME)" --namespace "$(NAMESPACE)"
-	minikube stop
-.PHONY: stop-helm-local
-
+	kubectl delete namespace "$(NAMESPACE)" --ignore-not-found
+.PHONY: delete-namespace
 
 
 .DEFAULT_GOAL := help

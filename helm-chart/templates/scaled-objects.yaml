@@ -1,0 +1,153 @@
+{{- if .Values.worker.useKedaAutoscaler }}
+{{- range $component := .Values.worker.scaling.scaledComponents }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledJob
+metadata:
+  name: avatar-job-{{ $component.queue }}
+
+spec:
+  # Link to Kubernetes Job spec documentation: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/job-v1/#JobSpec
+  scaleType: job 
+  jobTargetRef:
+    # We set 'parallelism' and 'completions' to 1 as we want one pod to be running a single celery task and then terminate
+    parallelism: 1 # one avatar task -> one worker -> one pod
+    completions: 1 # one avatar task -> one worker -> one pod
+    # We set the 'backoffLimit' to 0 as, if the pod fails during Job execution, the Job will be marked as JobStatus.KILLED or
+    # JobStatus.FAILURE, and we do not want to restart the Job as no task would be in the queue.
+    # Moreover, this allows us to kill the pod manually without it restarting.
+    backoffLimit: 0
+    restartPolicy: Never
+    # We set 'activeDeadlineSeconds' to 3600 seconds which is the current maximum allowed time for an avatar task.
+    # This way, the Pod will be killed when it crosses that threshold, which will prevent a pod from running
+    # indefinitely if no task has been picked up.
+    # This could probably be improved by using a Memory or CPU scaler from KEDA
+    activeDeadlineSeconds: 3600
+    template:
+      metadata:
+        labels:
+          {{- include "avatar.labels" $ | nindent 10 }}
+          app.kubernetes.io/component: job
+      spec:
+        # We set a 'podAntiAffinity' for the Jobs so that they don't get scheduled on the 
+        # same node as the API, as node scale down might bring down the API, 
+        # and we want it to be up as much as possible.
+        affinity:
+          podAntiAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                - key: app.kubernetes.io/component
+                  operator: In
+                  values:
+                  - api
+              topologyKey: "kubernetes.io/hostname"
+        serviceAccountName: {{ $.Values.gcp.ksaName | default "" | quote }}
+        # We set the !CONTAINER! 'restartPolicy' to Never as if the pod fails during Job execution, the Job will be marked as JobStatus.KILLED or
+        # JobStatus.FAILURE, and we do not want to restart the container as no task would be in the queue
+        restartPolicy: Never
+        containers:
+        {{- include "avatar.db_proxy_container" $ | nindent 2 }}
+          - name: avatar-worker
+            image: quay.io/octopize/api:{{ $.Values.avatarVersion }}
+            imagePullPolicy: {{ $.Values.image.pullPolicy }}
+            volumeMounts:
+              - mountPath: /var/run/secrets
+                name: secrets
+                readOnly: true
+            {{ if $.Values.debug.storage.useLocal }}
+              - mountPath: {{ $.Values.api.sharedStoragePath }}
+                name: avatar-pv-storage
+            {{ end }}
+            # We are using 'args' and not 'command' as we want to use the entrypoint of the Dockerfile https://stackoverflow.com/a/49657024
+            args: 
+              # The following syntax is so that we don't have to have every argument separated with a comma in a list
+              # and that we can go to a newline that will later be transformed into a space.
+              #
+              # /quitquitquit is to shutdown the cloud-sql-proxy sidecar when the job terminates.
+              # TODO: Replace the call to /quitquitquit when built-in support for Sidecar Containers is enabled
+              # See https://github.com/kubernetes/enhancements/issues/753
+              #
+              # We set --without-mingle and --without-gossip because we don't want the workers on different
+              # nodes communicating with each other.
+            - "/bin/bash"
+            - "-c"
+            - >- 
+              ./catch_celery_shutdown_message.sh
+              celery -A api.lib.task worker --loglevel=info --without-mingle --without-gossip --pool=prefork --concurrency=1 -Q {{ $component.queue  }}; 
+              curl --silent --show-error --retry 3 --retry-connrefused -X POST localhost:9091/quitquitquit
+            resources:
+              requests:
+                memory: {{ $component.memoryRequest }}
+                cpu: 1000m
+              limits:
+                memory: {{ $component.memoryRequest }}
+                cpu: 1000m
+            env:
+            {{- include "avatar.app_env" $ }}
+            - name: SHOULD_SHUTDOWN_AFTER_ONE_TASK
+              value: "True"
+          {{ if $.Values.debug.storage.useLocal }}
+            - name: USER_ID
+              value: "1000"
+            - name: USE_CONSOLE_LOGGING
+              value: "True"
+          {{- end }}
+        imagePullSecrets:
+          - name: docker-local-pull-secret
+        volumes:
+          - name: secrets
+            secret:
+              secretName: api
+              # We specifically list only the secrets that are needed in the image
+              items:
+              - key: db_name
+                path: db_name
+              - key: db_user
+                path: db_user
+              - key: db_password
+                path: db_password
+              - key: file_encryption_key
+                path: file_encryption_key
+      {{ if $.Values.debug.storage.useLocal }}
+          - name: avatar-pv-storage
+            persistentVolumeClaim:
+              claimName: avatar-pv-claim
+        securityContext:
+          runAsUser: 0
+      {{ end }}
+
+  pollingInterval: 5 # in seconds
+  cooldownPeriod: 200
+  # We set 'minReplicaCount' to 0 because we don't want to have any worker running when there is no task.
+  # The tradeoff is that we will take longer to react to the first task being set.
+  # The complete startup time is measured as the sum of
+  # - pollingInterval
+  # - container startup time
+  # - pod scheduling on a node
+  # - downloading container image if not present
+  # - acquiring a new Node if none are available
+  minReplicaCount: 0 # number of replicas to have running if nothing is in the queue
+  maxReplicaCount: {{ $.Values.worker.scaling.maxReplicaCount }}
+  successfulJobsHistoryLimit: 5
+  failedJobsHistoryLimit: 10
+  # We set 'scalingStrategy' to "accurate" as we do not have 'task_acks_late' enabled in celery,
+  # which means that a task is removed from the queue as soon as it is picked up by a celery worker.
+  # That way, we do not get more pods than there are messages in the queue.
+  scalingStrategy:
+    strategy: "accurate"
+  triggers:
+    - type: redis
+      metadata:
+        address: {{ $.Values.redisHost }}:{{ $.Values.redisPort }}
+        databaseIndex: "0"
+        listName: {{ $component.queue }}
+        # We set 'listLength' to one which corresponds to the number of messages that a Job will consume
+        # In our case, it's one, as one pod is supposed to run only a single celery task.
+        # KEDA will thus schedule exactly 1 Job per message in the queue.
+        # In the KEDA docs, this corresponds to targetAverageValue
+        listLength: "1"
+        activationListLength: "0" # start the scaling when there is one job in the queue
+---
+{{- end }}
+
+{{- end }}

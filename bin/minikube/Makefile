@@ -16,10 +16,6 @@ cluster: ## Create a ready-to-go avatar cluster with default values
  	 poetry run python launch.py create-cluster
 .PHONY: cluster
 
-delete-namespaces: ## Delete all the 'avatar' namespaces
-	kubectl get namespaces --no-headers=true -o custom-columns=:metadata.name | grep avatar | xargs --no-run-if-empty kubectl delete namespace || exit 0
-.PHONY: delete-namespaces
-
 
 lint:  ## Run linting
 	poetry run flake8 *.py
@@ -31,7 +27,7 @@ lint-fix:  ## Run autoformatters
 .PHONY: lint-fix
 
 typecheck:  ## Run typechecking
-	poetry run mypy --show-error-codes --pretty --show-traceback api
+	poetry run mypy --show-error-codes --pretty --show-traceback .
 .PHONY: typecheck
 
 

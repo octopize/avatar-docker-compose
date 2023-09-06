@@ -29,7 +29,8 @@ resources:
   apiCpuRequest: "1000m"
   pdfgeneratorCpuRequest: "1000m"
 
-redisHost: "127.0.0.1:6379"
+redisHost: "127.0.0.1"
+redisPort: 6379
 
 pdfgeneratorHost: "avatar-pdf"
 pdfgeneratorPort: 8001
@@ -51,6 +52,19 @@ gcp:
 debug:
   storage:
     useLocal: false
+
+worker:
+  useKedaAutoscaler: false
+  scaling:
+    maxReplicaCount: 10
+    scaledComponents:
+      - identifier: "medium"
+        memoryRequest: "32Gi"
+        queue: "medium"
+      - identifier: "huge"
+        memoryRequest: "64Gi"
+        queue: "huge"
+
 
 api:
   # Externally accessible API url (should be with https)
@@ -84,3 +98,6 @@ api:
 
   maxAllowedDimensionsPerDataset: "200"
   maxAllowedLinesPerDataset: "2000000"
+
+  workerMediumQueueSizeThreshold: ""
+  workerHugeQueueSizeThreshold: ""

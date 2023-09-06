@@ -19,6 +19,7 @@ spec:
     spec:
       serviceAccountName: {{ .Values.gcp.ksaName | default "" | quote }}
       containers:
+        {{- include "avatar.db_proxy_container" $ }}
         - name: avatar-worker
           image: quay.io/octopize/api:{{ .Values.avatarVersion }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
@@ -30,7 +31,18 @@ spec:
             - mountPath: {{ .Values.api.sharedStoragePath }}
               name: avatar-pv-storage
           {{ end }}
-          command: ["celery", "-A", "api.lib.task", "worker", "--loglevel=info", "--concurrency=4"]
+          # This worker uses the default celery queue ('celery') and the small queue to handle small jobs if autoscaling with keda is enabled.
+          # If autoscaling is not enabled, it listens to every queue.
+          #
+          # We are using 'args' and not 'command' as we want to use the entrypoint of the Dockerfile https://stackoverflow.com/a/49657024
+          args: 
+            # The following syntax is so that we don't have to have every argument separated with a comma in a list
+            # and that we can go to a newline that will later be transformed into a space
+            - "/bin/bash"
+            - "-c"
+            - >-
+              celery -A api.lib.task worker --loglevel=info --pool=solo --concurrency=4 
+              {{- if .Values.worker.useKedaAutoscaler }} -Q celery,small {{- end }}
           resources:
             requests:
               memory: {{ .Values.resources.workerMemoryRequest }}
@@ -39,12 +51,11 @@ spec:
               memory: {{ .Values.resources.workerMemoryRequest }}
               cpu: {{ .Values.resources.workerCpuRequest }}
           env:
-            {{- template "avatar.app_env" }}
+            {{- include "avatar.app_env" . }}
             {{ if .Values.debug.storage.useLocal }}
             - name: USER_ID
               value: "1000"
             {{ end }}
-        {{- template "avatar.db_proxy" . }}
       imagePullSecrets:
         - name: docker-local-pull-secret
       volumes:

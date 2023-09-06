@@ -6,9 +6,9 @@ metadata:
     {{- include "avatar.labels" . | nindent 4 }}
 
 data:
-  CELERY_BROKER_URL: redis://{{ .Values.redisHost }}/0
-  CELERY_RESULT_BACKEND: redis://{{ .Values.redisHost }}/1
-  RATELIMIT_REDIS_URL: redis://{{ .Values.redisHost }}/2
+  CELERY_BROKER_URL: redis://{{ .Values.redisHost }}:{{ .Values.redisPort }}/0
+  CELERY_RESULT_BACKEND: redis://{{ .Values.redisHost }}:{{ .Values.redisPort }}/1
+  RATELIMIT_REDIS_URL: redis://{{ .Values.redisHost }}:{{ .Values.redisPort }}/2
   IS_TELEMETRY_ENABLED: {{ .Values.api.isTelemetryEnabled | quote }}
   IS_SENTRY_ENABLED: {{ .Values.api.isSentryEnabled | quote }}
   DB_HOST: {{- if .Values.gcp.dbInstanceConnectionName }} "127.0.0.1" {{- else }} {{ .Values.dbHost | quote }} {{- end }}
@@ -21,5 +21,7 @@ data:
   USE_EMAIL_AUTHENTICATION: {{ .Values.api.useEmailAuthentication | default "false" | quote }}
   MAX_ALLOWED_DIMENSIONS_PER_DATASET: {{ .Values.api.maxAllowedDimensionsPerDataset | quote }}
   MAX_ALLOWED_LINES_PER_DATASET: {{ .Values.api.maxAllowedLinesPerDataset | quote }}
+  WORKER_MEDIUM_QUEUE_SIZE_THRESHOLD: {{ .Values.api.workerMediumQueueSizeThreshold | quote }}
+  WORKER_HUGE_QUEUE_SIZE_THRESHOLD: {{ .Values.api.workerHugeQueueSizeThreshold | quote }}
   LOG_LEVEL: {{ .Values.api.logLevel | quote }}
 

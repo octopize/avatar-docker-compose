@@ -1,3 +1,4 @@
+from typing import Protocol
 import base64
 import json
 import os
@@ -91,9 +92,6 @@ class PostgresHelmConfig(HelmConfig):
 
 
 class AvatarHelmConfig(HelmConfig):
-    namespace: str
-    release_name: str
-
     docker_pull_secret: str
     pepper: str = secrets.token_hex()
 
@@ -124,11 +122,12 @@ class AvatarHelmConfig(HelmConfig):
     api_cpu_request: str
     pdfgenerator_cpu_request: str
 
+    with_keda: bool
+
 
 class Result(BaseModel):
     namespace: str
     release_name: str
-    pass
 
 
 class AvatarResult(Result):
@@ -209,14 +208,7 @@ def is_minikube_running():
 
 
 def get_key(result: Result):
-    if isinstance(result, PostgresResult):
-        prefix = "postgres"
-    elif isinstance(result, RedisResult):
-        prefix = "redis"
-    else:
-        prefix = "avatar"
-
-    return f"{result.namespace}-{result.release_name}-{prefix}"
+    return f"{result.namespace}-{result.release_name}"
 
 
 def load_result(key: str) -> Result:
@@ -242,11 +234,28 @@ def load_result(key: str) -> Result:
 def save_result(result: Result) -> None:
     filename = f"{get_key(result)}.json"
     with open(SAVE_DIRECTORY / filename, "w") as f:
-        f.write(result.json())
+        # We load then dumps to have pretty printing
+        f.write(json.dumps(json.loads(result.json()), indent=4))
+
+
+class Chart(Enum):
+    POSTGRES = "postgres"
+    REDIS = "redis"
+    AVATAR = "avatar"
+    KEDA = "keda"
+
+
+def get_release_name(chart: Chart, release_name_prefix: str) -> str:
+    return f"{release_name_prefix}-{chart.value}"
+
+
+class RetryCallable(Protocol):
+    def __call__(self, *, nb_attempts_left: int, is_debug: bool) -> None:
+        ...
 
 
 def do_retry(
-    callable: Callable[[int, bool], None],  # should raise StopIteration
+    callable: RetryCallable,  # should raise StopIteration
     *,
     on_success_message: Optional[str] = None,
     on_failure_message: Optional[str] = None,
@@ -296,13 +305,85 @@ def do_retry(
 
 
 @app.command()
+def delete_cluster(
+    release_name_prefix: str = typer.Option(
+        ..., envvar="RELEASE_NAME", help="Suffix used for all the helm releases."
+    ),
+    namespace: str = typer.Option(
+        ...,
+        envvar="NAMESPACE",
+        help="Name of the Kubernetes namespace to deploy the release in.",
+    ),
+    is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
+):
+    get_pvcs = f"kubectl get pvc --no-headers=true -o custom-columns=:metadata.name --namespace {namespace}".split()
+    pvcs = subprocess.check_output(get_pvcs, text=True).splitlines()
+
+    # All PersistantVolumeClaims have a deletion protection finalizer, which
+    # prevents them from being deleted.
+    # We remove the finalizer before deleting the volume claim.
+    patch = r'{"metadata" :{"finalizers" : []}}'
+    for pvc in pvcs:
+        remove_deletion_protection = [
+            "kubectl",
+            "patch",
+            "pvc",
+            pvc,
+            "-p",
+            patch,
+            "--type=merge",
+            "--namespace",
+            namespace,
+            "--allow-missing-template-keys=false",
+        ]
+
+        delete_pvc = f"kubectl delete pvc {pvc} --namespace {namespace}".split()
+
+        # For some reason, doing a patch call before a delete call does not manage to modify remove
+        # the finalizers before the deletion is started,
+        # so it still waits indefinitely if we don't specify --wait=false.
+
+        subprocess.run(
+            delete_pvc + ["--wait=false"],
+            stdout=subprocess.DEVNULL if not is_debug else None,
+        )
+
+        subprocess.run(
+            remove_deletion_protection,
+            stdout=subprocess.DEVNULL if not is_debug else None,
+        )
+
+    releases = [
+        get_release_name(release_name_prefix=release_name_prefix, chart=chart)
+        for chart in Chart
+    ]
+
+    for release in releases:
+        uninstall_command = ["helm", "uninstall", release, "--namespace", namespace]
+        result = subprocess.run(
+            uninstall_command,
+            stdout=subprocess.DEVNULL if not is_debug else None,
+            stderr=subprocess.DEVNULL if not is_debug else subprocess.PIPE,
+            text=True,
+        )
+
+        return_code = result.returncode
+        if return_code != 0:
+            if is_debug:
+                typer.echo(result.stderr)
+            typer.echo(f"Could not delete Helm release {release}.")
+        else:
+            typer.echo(f"Deleted Helm release {release}.")
+
+
+@app.command()
 def create_cluster(
     docker_pull_secret: str = typer.Option(
         ...,
         envvar="DOCKER_PULL_SECRET",
         help="Docker secret used to pull the images. Can be found on quay.io or 1Password.",
     ),
-    release_name: str = typer.Option(
+    release_name_prefix: str = typer.Option(
         None, envvar="RELEASE_NAME", help="Suffix used for all the helm releases."
     ),
     namespace: str = typer.Option(
@@ -391,13 +472,14 @@ def create_cluster(
         DEFAULT_PDFGENERATOR_CPU_REQUEST,
         help="Amount of CPU to allocate to a avatar-pdfgenerator pod.",
     ),
+    with_keda: bool = typer.Option(True, help="Use KEDA autoscaling.", is_flag=True),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ) -> None:
     """Create a complete cluster able to run the Avatar API"""
 
     namespace = namespace or f"avatar-ns-{secrets.token_hex(2)}"
     typer.echo(f"Using namespace={namespace}")
-    release_name = release_name or "avatar"
+    release_name_prefix = release_name_prefix or "avatar"
     password = password or secrets.token_hex(16)
 
     verify_authentication(
@@ -410,7 +492,7 @@ def create_cluster(
     )
 
     postgres_result = create_postgres(
-        release_name=release_name,
+        release_name_prefix=release_name_prefix,
         namespace=namespace,
         is_debug=is_debug,
         db_name=db_name,
@@ -418,11 +500,11 @@ def create_cluster(
         db_password=db_password,
     )
     redis_result = create_redis(
-        release_name=release_name, namespace=namespace, is_debug=is_debug
+        release_name_prefix=release_name_prefix, namespace=namespace, is_debug=is_debug
     )
 
     create_avatar(
-        release_name=release_name,
+        release_name_prefix=release_name_prefix,
         namespace=namespace,
         docker_pull_secret=docker_pull_secret,
         avatar_version=avatar_version,
@@ -450,11 +532,12 @@ def create_cluster(
         db_password=postgres_result.db_password,
         redis_host=redis_result.redis_host,
         is_debug=is_debug,
+        with_keda=with_keda,
         should_upgrade_only=False,
     )
 
     typer.echo("Cluster setup complete")
-    filename = f"{namespace}-{release_name}-*.json"
+    filename = f"{namespace}-{release_name_prefix}-*.json"
     typer.echo(
         f"""You can find all the values that were setup in {SAVE_DIRECTORY / filename}"""
     )
@@ -463,7 +546,7 @@ def create_cluster(
 
 @app.command()
 def create_postgres(
-    release_name: str = typer.Option(
+    release_name_prefix: str = typer.Option(
         ..., envvar="RELEASE_NAME", help="Suffix used for all the helm releases."
     ),
     namespace: str = typer.Option(
@@ -479,18 +562,18 @@ def create_postgres(
     """Create a postgres database setup to run the Avatar API"""
 
     if not is_minikube_running():
-        typer.echo("Minikube is not running. Use 'minikube start' to run it.")
+        typer.echo("Minikube must be running. Run with 'minikube start'.")
         raise typer.Abort()
 
     config = PostgresHelmConfig(
-        release_name=release_name,
+        release_name=release_name_prefix,
         namespace=namespace,
         db_name=db_name,
         db_user=db_user,
         db_password=db_password or secrets.token_hex(),
     )
 
-    postgres_release = f"{release_name}-postgres"
+    postgres_release = get_release_name(Chart.POSTGRES, release_name_prefix)
     existing_postgres_release = subprocess.check_output(
         ["helm", "list", "--namespace", namespace, "--filter", postgres_release, "-q"],
         text=True,
@@ -580,7 +663,7 @@ def create_postgres(
 
     do_retry(
         initialize_database,
-        on_success_message="Database setup!",
+        on_success_message=f"Database setup! release_name={postgres_release}",
         on_failure_message="Could not initialize database",
         sleep_for_seconds=15,
         is_debug=is_debug,
@@ -588,7 +671,7 @@ def create_postgres(
 
     postgres_host = f"{postgres_release}-postgresql.{namespace}.svc.cluster.local"
     postgres_result = PostgresResult(
-        release_name=release_name,
+        release_name=postgres_release,
         namespace=namespace,
         db_host=postgres_host,
         db_password=config.db_password,
@@ -602,7 +685,7 @@ def create_postgres(
 
 @app.command()
 def create_redis(
-    release_name: str = typer.Option(..., envvar="RELEASE_NAME"),
+    release_name_prefix: str = typer.Option(..., envvar="RELEASE_NAME"),
     namespace: str = typer.Option(..., envvar="NAMESPACE"),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ) -> RedisResult:
@@ -612,7 +695,7 @@ def create_redis(
         typer.echo("Minikube must be running. Run with 'minikube start'.")
         raise typer.Abort()
 
-    redis_release = f"{release_name}-redis"
+    redis_release = get_release_name(Chart.REDIS, release_name_prefix)
     existing_redis_release = subprocess.check_output(
         ["helm", "list", "--namespace", namespace, "--filter", redis_release, "-q"],
         text=True,
@@ -682,23 +765,23 @@ def create_redis(
     do_retry(
         verify_status,
         on_failure_message="Could not initialize database.",
-        sleep_for_seconds=10,
+        sleep_for_seconds=15,
         is_debug=is_debug,
     )
 
-    typer.echo("Redis setup!")
+    typer.echo(f"Redis setup! release_name={redis_release}")
 
     redis_host = f"{redis_release}-master.{namespace}.svc.cluster.local"
     return RedisResult(
         redis_host=redis_host,
-        release_name=release_name,
+        release_name=redis_release,
         namespace=namespace,
     )
 
 
 @app.command()
 def create_avatar(
-    release_name: str = typer.Option(
+    release_name_prefix: str = typer.Option(
         ..., envvar="RELEASE_NAME", help="Suffix used for all the helm releases."
     ),
     namespace: str = typer.Option(
@@ -802,6 +885,7 @@ def create_avatar(
         """Can be useful if you forgot to change a single value and you don't want to create a brand new release.""",
     ),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
+    with_keda: bool = typer.Option(True, "--with-keda", help="Use KEDA autoscaling."),
 ) -> AvatarResult:
     """ADVANCED. Use create-cluster if you're new to this.
     Create the avatar component hosting the Avatar API.
@@ -823,15 +907,17 @@ def create_avatar(
 
     if not should_upgrade_only and (not db_host or not redis_host):
         typer.echo(
-            f"Expected 'db_host' and 'redis_host' to have a value, but got {db_host=} and {redis_host=}."
+            "Expected 'postgres_host' and 'redis_host' to have a value, but they have not."
         )
         typer.echo(
-            "Consider running 'python launch.py create-postgres' and 'python launch.py create-redis' beforehand"
+            "Consider running 'python minikube.by create-postgres' and 'python minikube create-redis' beforehand"
         )
         raise typer.Abort()
 
+    avatar_release_name = get_release_name(Chart.AVATAR, release_name_prefix)
+
     config = AvatarHelmConfig(
-        release_name=release_name,
+        release_name=avatar_release_name,
         namespace=namespace,
         api_base_url=api_base_url,
         avatar_version=avatar_version,
@@ -843,6 +929,7 @@ def create_avatar(
         db_name=db_name,
         postgres_host=db_host,
         redis_host=redis_host,
+        with_keda=with_keda,
         organization_name=organization_name,
         authentication=authentication,
         is_telemetry_enabled=is_telemetry_enabled,
@@ -867,9 +954,11 @@ def create_avatar(
     save_result(avatar_result)
 
     upgrade_or_install = "install" if not should_upgrade_only else "upgrade"
-    avatar_release_name = f"{config.release_name}-avatar"
     flags = ["--create-namespace", "--debug"]
     namespace_command = ["--namespace", config.namespace]
+    using_keda_autoscaling = (
+        ["--set", "worker.useKedaAutoscaler=true"] if config.with_keda else []
+    )
     using_local_storage = ["--set", "debug.storage.useLocal=true"]
 
     values = list(
@@ -891,7 +980,7 @@ def create_avatar(
                 "--set",
                 f"api.useEmailAuthentication={str(use_email_authentication).lower()}",
             ],
-            ["--set", f"api.adminEmails={{{','.join(email)}}}"]
+            ["--set", f"api.adminEmails={{{','.join(email)}}}"]  # type: ignore[arg-type]
             if use_email_authentication
             else [],
             *(
@@ -900,6 +989,32 @@ def create_avatar(
             ),
         )
     )
+
+    if config.with_keda:
+        keda_release_name = get_release_name(Chart.KEDA, release_name_prefix)
+        install_keda = [
+            "helm",
+            upgrade_or_install,
+            keda_release_name,
+            "kedacore/keda",
+            "--namespace",
+            namespace,
+        ]
+
+        typer.echo(f"Creating keda Helm release with release_name={keda_release_name}")
+
+        result = subprocess.run(
+            install_keda,
+            stdout=subprocess.DEVNULL if not is_debug else None,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+
+        if result.returncode != 0:
+            typer.echo(result.stderr)
+            raise typer.Exit(1)
+
+    time.sleep(10)  # TODO: optimize this
 
     install_avatar = [
         "helm",
@@ -910,13 +1025,18 @@ def create_avatar(
         *flags,
         *values,
         *using_local_storage,
+        *using_keda_autoscaling,
         *authentication_values,
     ]
 
     if should_upgrade_only:
-        typer.echo("Updating avatar Helm release...")
+        typer.echo(
+            f"Updating avatar Helm release with release_name={config.release_name}"
+        )
     else:
-        typer.echo("Creating avatar Helm release...")
+        typer.echo(
+            f"Creating avatar Helm release with release_name={config.release_name}"
+        )
 
     if is_debug:
         typer.echo(" ".join(install_avatar))
@@ -954,20 +1074,35 @@ def create_avatar(
 
     time.sleep(15)  # wait for the pod to be running, TODO: could be optimized
     typer.echo("Port forwarding port 8000 from API to host.")
-    result = subprocess.Popen(
+    subprocess.Popen(
         ["kubectl", "port-forward", "-n", namespace, "service/avatar-api", "8000:8000"],
         close_fds=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL # an error is thrown, but port forwarding succeeds
+        
     )
 
+    typer.echo("Waiting for the API to be healthy...")
     do_retry(
         verify_api_health,
-        on_failure_message="API is not yet healthy",
-        on_success_message="You can now connect to the API from your machine at localhost:8000",
+        on_failure_message="API did not manage to be healthy before timeout...",
+        on_success_message="API healthy! \n\n You can now connect to the API from your machine at localhost:8000",
         should_exit_on_failure=False,
         is_debug=is_debug,
     )
 
     typer.echo("Avatar release setup!")
+
+    email_or_username = (
+        config.authentication.admin_emails[0]
+        if hasattr(config.authentication, "admin_emails")
+        else config.authentication.username
+    )
+    typer.echo("Useful commands")
+
+    typer.echo(f'\t- AVATAR_BASE_URL="{config.api_base_url}" AVATAR_USERNAME="{email_or_username}" AVATAR_PASSWORD="{config.authentication.password}" make -C ../../../avatar/platform/api run-test-integration')
+    typer.echo(f'\t- poetry run python launch.py delete-cluster --release-name-prefix {release_name_prefix} --namespace {namespace}')
+    
     return avatar_result
 
 
@@ -1017,6 +1152,7 @@ def get_authentication(
         password=password,
     )
 
+    auth: Authentication
     if use_email_authentication:
         auth = EmailAuthentication(
             admin_emails=cast(list[str], emails),

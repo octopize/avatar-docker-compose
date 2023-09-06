@@ -127,26 +127,31 @@ Define the default app env variables
                 configMapKeyRef:
                   name: avatar-config
                   key: LOG_LEVEL
+            - name: DELETE_FILES_USING_CRONJOB
+              value: "false"
 {{- end }}
 
 {{/*
 Define the Google Cloud SQL proxy if necessary
+Documentation: https://cloud.google.com/sql/docs/mysql/connect-kubernetes-engine
 */}}
-{{- define "avatar.db_proxy" }}
-{{- if .Values.gcp.dbInstanceConnectionName }}
+{{- define "avatar.db_proxy_container" }}
+{{- if $.Values.gcp.dbInstanceConnectionName }}
         - name: cloud-sql-proxy
-          image: gcr.io/cloudsql-docker/gce-proxy:1.31.2 # make sure the use the latest version
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.5.0 # make sure the use the latest version
           command:
-            - "/cloud_sql_proxy"
-            - "-log_debug_stdout"
+            - "/cloud-sql-proxy"
+            - "--auto-ip"
+            - "--quitquitquit"
             # Unused for now
             # - "-enable_iam_login"
-            - "-instances={{ .Values.gcp.dbInstanceConnectionName }}=tcp:5432"
+            - "{{ $.Values.gcp.dbInstanceConnectionName }}"
           securityContext:
             runAsNonRoot: true
           resources:
             requests:
               memory: "1Gi"
               cpu:    "1"
+
 {{- end }}
 {{- end }}

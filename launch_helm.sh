@@ -103,7 +103,7 @@ echo postgres_release="$postgres_release"
 echo postgres_host="$postgres_host"
 
 redis_release="$release_name-redis"
-redis_host="$redis_release-master.$namespace.svc.cluster.local"
+redis_host="$redis_release-master.$namespace.svc.cluster.local:6379"
 
 
 if [ "$only_avatar" != "true" ]; then
@@ -127,7 +127,7 @@ upgrade="${UPGRADE-}"
 echo UPGRADE="$upgrade"
 subcommand=$([ "$upgrade" = "true" ] && echo "upgrade" || echo "install")
 
-cmd=(helm "$subcommand" --debug "$release_name" ./helm-chart --namespace "$namespace" --create-namespace \
+cmd=(helm "$subcommand" --debug "$release_name"-avatar ./helm-chart --namespace "$namespace" --create-namespace \
       --set api.baseUrl="http://localhost:8000" \
       --set dockerPullSecret="$docker_pull_secret" \
       --set avatarVersion="$avatar_version" \

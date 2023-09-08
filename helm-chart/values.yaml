@@ -21,6 +21,9 @@ dbUsername: "avatar"
 dbPassword: ""
 
 resources:
+  apiReplicas: 1
+  workerReplicas: 2
+  pdfgeneratorReplicas: 1
   workerMemoryRequest: "32Gi"
   apiMemoryRequest: "4Gi"
   pdfgeneratorMemoryRequest: "2Gi"

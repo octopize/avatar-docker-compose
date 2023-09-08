@@ -10,7 +10,7 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: api
-  replicas: 1
+  replicas: {{ .Values.resources.apiReplicas }}
   template:
     metadata:
       labels:

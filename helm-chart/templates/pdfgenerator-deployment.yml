@@ -10,7 +10,7 @@ spec:
   selector:
     matchLabels:
       app.kubernetes.io/component: pdfgenerator
-  replicas: 1
+  replicas: {{ .Values.resources.pdfgeneratorReplicas }}
   template:
     metadata:
       labels:

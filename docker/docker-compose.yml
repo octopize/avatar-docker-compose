@@ -97,7 +97,6 @@ services:
       - file_encryption_key
       - db_name
       - db_user
-      - clevercloud_sso_salt
 
   cron:
     image: quay.io/octopize/api:${AVATAR_API_VERSION}

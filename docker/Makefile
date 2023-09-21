@@ -9,7 +9,7 @@ MAKEFLAGS += --no-builtin-rules
 SECRETS_DIR := .secrets
 # File-based recipes
 
-common-secrets: $(SECRETS_DIR)/db_password $(SECRETS_DIR)/db_name $(SECRETS_DIR)/db_user $(SECRETS_DIR)/pepper $(SECRETS_DIR)/file_encryption_key $(SECRETS_DIR)/authjwt_secret_key $(SECRETS_DIR)/organization_name
+common-secrets: $(SECRETS_DIR)/db_password $(SECRETS_DIR)/db_name $(SECRETS_DIR)/db_user $(SECRETS_DIR)/pepper $(SECRETS_DIR)/file_encryption_key $(SECRETS_DIR)/authjwt_secret_key $(SECRETS_DIR)/organization_name $(SECRETS_DIR)/clevercloud_sso_salt
 .PHONY: common-secrets
 
 secrets-with-username-auth: common-secrets $(SECRETS_DIR)/avatar_first_user_password $(SECRETS_DIR)/avatar_first_user_name ## Initialize secrets for username authentication
@@ -67,6 +67,9 @@ $(SECRETS_DIR)/aws_mail_account_secret_access_key:
 	mkdir -p $(SECRETS_DIR)
 	echo "" > $@
 
+$(SECRETS_DIR)/clevercloud_sso_salt:
+	mkdir -p $(SECRETS_DIR)
+	python3 -c "import secrets; print(secrets.token_hex())" > $@
 
 .DEFAULT_GOAL := help
 help: Makefile

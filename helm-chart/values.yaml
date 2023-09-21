@@ -101,6 +101,9 @@ api:
 
   maxAllowedDimensionsPerDataset: "200"
   maxAllowedLinesPerDataset: "2000000"
-
+  
   workerMediumQueueSizeThreshold: ""
   workerHugeQueueSizeThreshold: ""
+
+  # Clevercloud constant
+  clevercloudSsoSalt: ""

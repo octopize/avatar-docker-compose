@@ -127,6 +127,11 @@ Define the default app env variables
                 configMapKeyRef:
                   name: avatar-config
                   key: LOG_LEVEL
+            - name: CLEVERCLOUD_SSO_SALT
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: CLEVERCLOUD_SSO_SALT
             - name: DELETE_FILES_USING_CRONJOB
               value: "false"
 {{- end }}

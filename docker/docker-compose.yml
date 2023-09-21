@@ -57,6 +57,8 @@ services:
       # - aws_mail_account_access_key_id
       # - aws_mail_account_secret_access_key
 
+      - clevercloud_sso_salt
+
   worker:
     image: quay.io/octopize/api:latest
     platform: linux/x86_64
@@ -187,6 +189,9 @@ secrets:
   #   file: ${SECRETS_DIR-.secrets}/aws_mail_account_access_key_id
   # aws_mail_account_secret_access_key:
   #   file: ${SECRETS_DIR-.secrets}/aws_mail_account_secret_access_key
+
+  clevercloud_sso_salt:
+    file: ${SECRETS_DIR-.secrets}/clevercloud_sso_salt
 
 volumes:
   caddy-data:

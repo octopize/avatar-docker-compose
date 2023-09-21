@@ -122,12 +122,12 @@ Define the default app env variables
                 configMapKeyRef:
                   name: avatar-config
                   key: MAX_ALLOWED_LINES_PER_DATASET
-			- name: LOG_LEVEL
+            - name: LOG_LEVEL
               valueFrom:
                 configMapKeyRef:
                   name: avatar-config
                   key: LOG_LEVEL
-              - name: CLEVERCLOUD_SSO_SALT
+            - name: CLEVERCLOUD_SSO_SALT
               valueFrom:
                 configMapKeyRef:
                   name: avatar-config

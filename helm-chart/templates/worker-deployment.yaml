@@ -18,6 +18,17 @@ spec:
         app.kubernetes.io/component: worker
     spec:
       serviceAccountName: {{ .Values.gcp.ksaName | default "" | quote }}
+      {{ if .Values.resources.workerPreferredNodeType }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nodeType
+                operator: In
+                values:
+                - {{ .Values.resources.workerPreferredNodeType | quote}}   
+      {{ end }}
       containers:
         {{- include "avatar.db_proxy_container" $ }}
         - name: avatar-worker

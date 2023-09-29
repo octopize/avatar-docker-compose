@@ -32,6 +32,10 @@ resources:
   apiCpuRequest: "1000m"
   pdfgeneratorCpuRequest: "1000m"
 
+  workerPreferredNodeType: ""
+  apiPreferredNodeType: ""
+  pdfgeneratorPreferredNodeType: ""
+
 redisHost: "127.0.0.1"
 redisPort: 6379
 
@@ -62,9 +66,11 @@ worker:
     maxReplicaCount: 10
     scaledComponents:
       - identifier: "medium"
+        preferredNodeType: ""
         memoryRequest: "32Gi"
         queue: "medium"
       - identifier: "huge"
+        preferredNodeType: ""
         memoryRequest: "64Gi"
         queue: "huge"
 

@@ -17,6 +17,17 @@ spec:
         {{- include "avatar.labels" . | nindent 8 }}
         app.kubernetes.io/component: pdfgenerator
     spec:
+      {{ if .Values.resources.pdfgeneratorPreferredNodeType }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nodeType
+                operator: In
+                values:
+                - {{ .Values.resources.pdfgeneratorPreferredNodeType | quote}}   
+      {{ end }}
       containers:
         - name: pdfgenerator
           image: quay.io/octopize/pdfgenerator:{{ .Values.pdfgeneratorVersion }}

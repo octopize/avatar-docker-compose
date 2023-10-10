@@ -18,6 +18,17 @@ spec:
         # Do not modify the following label without modifying the `podAffinity` of other objects.
         app.kubernetes.io/component: api
     spec:
+      {{ if .Values.resources.apiPreferredNodeType }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nodeType
+                operator: In
+                values:
+                - {{ .Values.resources.apiPreferredNodeType | quote}}   
+      {{ end }}
       serviceAccountName: {{ .Values.gcp.ksaName | default "" | quote }}
       containers:
         {{- include "avatar.db_proxy_container" $ }}

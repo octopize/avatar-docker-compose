@@ -82,6 +82,7 @@ api:
   isTelemetryEnabled: true
   isSentryEnabled: true
   logLevel: "INFO"
+  deleteFilesUsingCronjob: false
 
   pepper: TODO   # python -c "import secrets; print(secrets.token_hex(), end='')"
   authjwtSecretKey: TODO   # python -c "import secrets; print(secrets.token_hex(), end='')"

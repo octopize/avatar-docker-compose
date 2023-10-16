@@ -143,7 +143,10 @@ Define the default app env variables
                   name: avatar-config
                   key: CLEVERCLOUD_SSO_SALT
             - name: DELETE_FILES_USING_CRONJOB
-              value: "false"
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: DELETE_FILES_USING_CRONJOB
 {{- end }}
 
 {{/*

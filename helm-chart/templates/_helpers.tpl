@@ -112,6 +112,16 @@ Define the default app env variables
                 configMapKeyRef:
                   name: avatar-config
                   key: PDFGENERATOR_URL
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: api
+                  key: aws_storage_account_access_key_id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api
+                  key: aws_storage_account_secret_access_key
             - name: MAX_ALLOWED_DIMENSIONS_PER_DATASET
               valueFrom:
                 configMapKeyRef:

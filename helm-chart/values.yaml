@@ -100,6 +100,9 @@ api:
 
   # Path to s3:// or gs://
   sharedStoragePath: ""
+  
+  awsStorageAccountAccessKeyId: ""
+  awsStorageAccountSecretAccessKey: ""
 
   # AWS Mail account used to send mails for password reset
   awsMailAccountAccessKeyId: ""

@@ -26,11 +26,13 @@ spec:
           {{- include "avatar.labels" $ | nindent 10 }}
           app.kubernetes.io/component: job
       spec:
-        # We set a 'podAntiAffinity' for the Jobs so that they don't get scheduled on the 
-        # same node as the API, as node scale down might bring down the API, 
-        # and we want it to be up as much as possible.
-
+        tolerations:
+          # Allow this pod to be scheduled on tainted nodes with a key of "highMemory"
+          # https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration
+        - key: "highMemory"
+          operator: "Exists"
         affinity:
+        # Force this pod to be scheduled on a node with the appropriate key defined in `preferredNodeType`.
         {{ if $component.preferredNodeType }}
           nodeAffinity:
             requiredDuringSchedulingIgnoredDuringExecution:
@@ -42,6 +44,9 @@ spec:
                   - {{ $component.preferredNodeType | quote }}   
         {{ end }}
           podAntiAffinity:
+          # We set a 'podAntiAffinity' for the Jobs so that they don't get scheduled on the 
+          # same node as the API, as node scale down might bring down the API, 
+          # and we want it to be up as much as possible.
             requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
                 matchExpressions:
@@ -130,10 +135,10 @@ spec:
   # The tradeoff is that we will take longer to react to the first task being set.
   # The complete startup time is measured as the sum of
   # - pollingInterval
-  # - container startup time
+  # - acquiring a new Node if none are available
   # - pod scheduling on a node
   # - downloading container image if not present
-  # - acquiring a new Node if none are available
+  # - container startup time
   maxReplicaCount: {{ $.Values.worker.scaling.maxReplicaCount }}
   successfulJobsHistoryLimit: 5
   failedJobsHistoryLimit: 10

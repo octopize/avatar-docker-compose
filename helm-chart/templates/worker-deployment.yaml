@@ -18,6 +18,11 @@ spec:
         app.kubernetes.io/component: worker
     spec:
       serviceAccountName: {{ .Values.gcp.ksaName | default "" | quote }}
+      tolerations:
+        # Allow this pod to be scheduled on tainted nodes with a key of "highMemory"
+        # https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration
+      - key: "highMemory"
+        operator: "Exists"
       {{ if .Values.resources.workerPreferredNodeType }}
       affinity:
         nodeAffinity:

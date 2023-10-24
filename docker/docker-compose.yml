@@ -113,6 +113,7 @@ services:
       CELERY_BROKER_URL: "redis://redis:6379/0"
       CELERY_RESULT_BACKEND: "redis://redis:6379/1"
       BASE_API_URL: ${BASE_API_URL}
+      PDFGENERATOR_URL: "http://pdfgenerator:8000/"
       SHARED_STORAGE_PATH: ${SHARED_STORAGE_PATH}
       USER_ID: ${USER_ID} # user id of the user executing the container
 

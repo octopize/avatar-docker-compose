@@ -25,3 +25,5 @@ data:
   WORKER_HUGE_QUEUE_SIZE_THRESHOLD: {{ .Values.api.workerHugeQueueSizeThreshold | quote }}
   LOG_LEVEL: {{ .Values.api.logLevel | quote }}
   DELETE_FILES_USING_CRONJOB: {{ .Values.api.deleteFilesUsingCronjob | quote }}
+  WORKER_MEDIUM_QUEUE_ON_DISK_SIZE_THRESHOLD_BYTES: {{ .Values.api.workerMediumQueueOnDiskSizeThresholdBytes | quote }}
+  WORKER_HUGE_QUEUE_ON_DISK_SIZE_THRESHOLD_BYTES: {{ .Values.api.workerHugeQueueOnDiskSizeThresholdBytes | quote }}

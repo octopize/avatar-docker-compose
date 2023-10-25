@@ -115,5 +115,8 @@ api:
   workerMediumQueueSizeThreshold: ""
   workerHugeQueueSizeThreshold: ""
 
+  workerMediumQueueOnDiskSizeThresholdBytes: ""
+  workerHugeQueueOnDiskSizeThresholdBytes: ""
+
   # Clevercloud constant
   clevercloudSsoSalt: ""

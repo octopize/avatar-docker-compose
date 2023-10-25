@@ -72,6 +72,16 @@ spec:
                 configMapKeyRef:
                   name: avatar-config
                   key: WORKER_HUGE_QUEUE_SIZE_THRESHOLD
+            - name: WORKER_MEDIUM_QUEUE_ON_DISK_SIZE_THRESHOLD_BYTES
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: WORKER_MEDIUM_QUEUE_ON_DISK_SIZE_THRESHOLD_BYTES
+            - name: WORKER_HUGE_QUEUE_ON_DISK_SIZE_THRESHOLD_BYTES
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: WORKER_HUGE_QUEUE_ON_DISK_SIZE_THRESHOLD_BYTES
             {{ if .Values.debug.storage.useLocal }}
             - name: USER_ID
               value: "1000"

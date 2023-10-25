@@ -88,7 +88,9 @@ spec:
             - >- 
               ./catch_celery_shutdown_message.sh
               celery -A api.lib.task worker --loglevel=info --without-mingle --without-gossip --pool=prefork --concurrency=1 -Q {{ $component.queue  }}; 
+              {{- if $.Values.gcp.dbInstanceConnectionName }}
               curl --silent --show-error --retry 3 --retry-connrefused -X POST localhost:9091/quitquitquit
+              {{- end }}
             resources:
               requests:
                 memory: {{ $component.memoryRequest }}

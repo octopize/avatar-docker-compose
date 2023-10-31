@@ -42,5 +42,27 @@ spec:
           ports:
             - name: pdfgenerator
               containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: "/health"
+              port: 8000
+              httpHeaders:
+              - name: Host
+                value: "127.0.0.1"
+            failureThreshold: 3
+            periodSeconds: 30
+            timeoutSeconds: 2
+          livenessProbe:
+            # https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+            httpGet:
+              path: "/health"
+              port: 8000
+              httpHeaders:
+              - name: Host
+                value: "127.0.0.1"
+            failureThreshold: 3
+            periodSeconds: 30
+            timeoutSeconds: 2
+
       imagePullSecrets:
         - name: docker-local-pull-secret

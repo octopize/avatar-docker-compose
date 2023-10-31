@@ -6,8 +6,8 @@ image:
 
 # The image tag version. It's a good idea to pin it to something specific.
 # Avoid using "latest".
-avatarVersion: 0.5.17
-pdfgeneratorVersion: 0.1.0
+avatarVersion: 0.5.18
+pdfgeneratorVersion: 0.1.4
 
 # Octopize will provide you with this, it should be base64 encoded.
 dockerPullSecret: ""

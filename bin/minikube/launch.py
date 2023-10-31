@@ -1,4 +1,3 @@
-from typing import Protocol
 import base64
 import json
 import os
@@ -8,7 +7,7 @@ import time
 from enum import Enum
 from itertools import chain
 from pathlib import Path
-from typing import Callable, Optional, cast
+from typing import Optional, Protocol, cast
 
 import typer
 from pydantic import BaseModel
@@ -316,7 +315,7 @@ def delete_cluster(
     ),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ):
-    get_pvcs = f"kubectl get pvc --no-headers=true -o custom-columns=:metadata.name --namespace {namespace}".split()
+    get_pvcs = f"kubectl get pvc --no-headers=true -o custom-columns=:metadata.name --namespace {namespace}".split()  # noqa: E501
     pvcs = subprocess.check_output(get_pvcs, text=True).splitlines()
 
     # All PersistantVolumeClaims have a deletion protection finalizer, which
@@ -421,7 +420,8 @@ def create_cluster(
     email: Optional[list[str]] = typer.Option(
         None,
         help="""Emails for the admins. Used if --use-email-authentication is set.\n\n"""
-        """Can be used multiple times: e.g. --email mail1@octopize.io --email mail2@octopize.io will create 2 admin accounts.""",
+        """Can be used multiple times: e.g. --email mail1@octopize.io --email mail2@octopize.io """
+        """which will create 2 admin accounts.""",
     ),
     username: str = typer.Option(
         DEFAULT_USERNAME,
@@ -429,7 +429,8 @@ def create_cluster(
     ),
     password: str = typer.Option(
         None,
-        help="Password for the admin. Required if --use-email-authentication is NOT set. Used only with username.",
+        help="""Password for the admin. Required if --use-email-authentication is NOT set. """
+        """Used only with username.""",
     ),
     db_name: str = typer.Option(DEFAULT_DB_NAME),
     db_user: str = typer.Option(DEFAULT_DB_NAME),
@@ -480,6 +481,7 @@ def create_cluster(
     namespace = namespace or f"avatar-ns-{secrets.token_hex(2)}"
     typer.echo(f"Using namespace={namespace}")
     release_name_prefix = release_name_prefix or "avatar"
+    typer.echo(f"Using release_name_prefix={release_name_prefix}")
     password = password or secrets.token_hex(16)
 
     verify_authentication(
@@ -882,7 +884,8 @@ def create_avatar(
         False,
         "--upgrade-only",
         help="""Whether to run 'helm upgrade' instead of 'helm install'.\n\n"""
-        """Can be useful if you forgot to change a single value and you don't want to create a brand new release.""",
+        """Can be useful if you forgot to change a single value """
+        """and you don't want to create a brand new release.""",
     ),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
     with_keda: bool = typer.Option(True, "--with-keda", help="Use KEDA autoscaling."),
@@ -910,7 +913,8 @@ def create_avatar(
             "Expected 'postgres_host' and 'redis_host' to have a value, but they have not."
         )
         typer.echo(
-            "Consider running 'python minikube.by create-postgres' and 'python minikube create-redis' beforehand"
+            """Consider running 'python minikube.by create-postgres' and """
+            """'python minikube create-redis' beforehand"""
         )
         raise typer.Abort()
 
@@ -1078,31 +1082,44 @@ def create_avatar(
         ["kubectl", "port-forward", "-n", namespace, "service/avatar-api", "8000:8000"],
         close_fds=True,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL # an error is thrown, but port forwarding succeeds
-        
+        stderr=subprocess.DEVNULL,  # an error is thrown, but port forwarding succeeds
     )
 
     typer.echo("Waiting for the API to be healthy...")
     do_retry(
         verify_api_health,
         on_failure_message="API did not manage to be healthy before timeout...",
-        on_success_message="API healthy! \n\n You can now connect to the API from your machine at localhost:8000",
+        on_success_message="""API healthy! \n\n """
+        """You can now connect to the API from your machine at localhost:8000""",
         should_exit_on_failure=False,
         is_debug=is_debug,
     )
 
     typer.echo("Avatar release setup!")
 
-    email_or_username = (
-        config.authentication.admin_emails[0]
-        if hasattr(config.authentication, "admin_emails")
-        else config.authentication.username
-    )
+    email_or_username: str
+    auth_password: Optional[str] = None
+    if use_email_authentication:
+        email_or_username = cast(
+            EmailAuthentication, config.authentication
+        ).admin_emails[0]
+    else:
+        auth = cast(UsernameAuthentication, config.authentication)
+        email_or_username = auth.username
+        auth_password = auth.password
+
     typer.echo("Useful commands")
 
-    typer.echo(f'\t- AVATAR_BASE_URL="{config.api_base_url}" AVATAR_USERNAME="{email_or_username}" AVATAR_PASSWORD="{config.authentication.password}" make -C ../../../avatar/platform/api run-test-integration')
-    typer.echo(f'\t- poetry run python launch.py delete-cluster --release-name-prefix {release_name_prefix} --namespace {namespace}')
-    
+    typer.echo(
+        f"""\t-AVATAR_BASE_URL='{config.api_base_url}'"""
+        f"""AVATAR_USERNAME='{email_or_username}'"""
+        f"""AVATAR_PASSWORD='{auth_password}'"""
+        """make -C ../../../avatar/platform/api run-test-integration"""
+    )
+    typer.echo(
+        f"\t- poetry run python launch.py delete-cluster --release-name-prefix {release_name_prefix} --namespace {namespace}"  # noqa: E501
+    )
+
     return avatar_result
 
 

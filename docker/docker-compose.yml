@@ -114,6 +114,8 @@ services:
       CELERY_RESULT_BACKEND: "redis://redis:6379/1"
       BASE_API_URL: ${BASE_API_URL}
       PDFGENERATOR_URL: "http://pdfgenerator:8000/"
+      IS_TELEMETRY_ENABLED: ${IS_TELEMETRY_ENABLED}
+      IS_SENTRY_ENABLED: ${IS_SENTRY_ENABLED}
       SHARED_STORAGE_PATH: ${SHARED_STORAGE_PATH}
       USER_ID: ${USER_ID} # user id of the user executing the container
 
@@ -145,7 +147,7 @@ services:
   caddy:
     image: caddy:2.4.6-alpine
     logging: *default-logging
-    restart: unless-stopped
+    restart: on-failure
     ports:
       - "443:443"
     environment:
@@ -160,6 +162,7 @@ services:
   pdfgenerator:
     image: quay.io/octopize/pdfgenerator:${AVATAR_PDFGENERATOR_VERSION}
     logging: *default-logging
+    restart: on-failure
 
 secrets:
   db_password:

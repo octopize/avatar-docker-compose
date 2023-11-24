@@ -10,7 +10,7 @@ services:
   api:
     image: quay.io/octopize/api:${AVATAR_API_VERSION}
     platform: linux/x86_64
-    restart: on-failure
+    restart: on-failure:10
     logging: *default-logging
     volumes:
       - ${HOST_SHARED_STORAGE_PATH}:/home/${CONTAINER_USER_NAME-avatar}/shared # only used for local or on-premise
@@ -62,7 +62,7 @@ services:
   worker:
     image: quay.io/octopize/api:latest
     platform: linux/x86_64
-    restart: on-failure
+    restart: on-failure:10
     logging: *default-logging
     # celery defaults its concurrency to the number of CPUs available
     command: celery -A api.lib.task worker --loglevel=info
@@ -101,7 +101,7 @@ services:
   cron:
     image: quay.io/octopize/api:${AVATAR_API_VERSION}
     platform: linux/x86_64
-    restart: on-failure
+    restart: on-failure:10
     logging: *default-logging
     command: celery -A api.lib.task beat --loglevel=info -s /tmp/celerybeat-schedule
     depends_on:
@@ -121,7 +121,7 @@ services:
 
   db:
     image: postgres:14.0
-    restart: on-failure
+    restart: on-failure:10
     logging: *default-logging
     environment:
       # Appending any env variable with '_FILE' allows the file content to
@@ -147,7 +147,7 @@ services:
   caddy:
     image: caddy:2.4.6-alpine
     logging: *default-logging
-    restart: on-failure
+    restart: on-failure:10
     ports:
       - "443:443"
     environment:
@@ -162,7 +162,7 @@ services:
   pdfgenerator:
     image: quay.io/octopize/pdfgenerator:${AVATAR_PDFGENERATOR_VERSION}
     logging: *default-logging
-    restart: on-failure
+    restart: on-failure:10
 
 secrets:
   db_password:

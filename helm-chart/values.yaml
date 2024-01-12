@@ -6,7 +6,7 @@ image:
 
 # The image tag version. It's a good idea to pin it to something specific.
 # Avoid using "latest".
-avatarVersion: 0.5.18
+avatarVersion: 0.5.22
 pdfgeneratorVersion: 0.1.4
 
 # Octopize will provide you with this, it should be base64 encoded.
@@ -22,7 +22,7 @@ dbPassword: ""
 
 resources:
   apiReplicas: 1
-  workerReplicas: 2
+  workerReplicas: 1
   pdfgeneratorReplicas: 1
   workerMemoryRequest: "32Gi"
   apiMemoryRequest: "4Gi"
@@ -58,10 +58,14 @@ gcp:
 
 debug:
   storage:
+    # If true, creates a PersistentVolumeClaim and mounts it to the API and worker pods.
+    # Otherwise, we expect the shared storage to be specified in the ConfigMap and point
+    # to a remote storage (s3:// or gs://).
     useLocal: false
 
 worker:
   useKedaAutoscaler: false
+  preventPodsFromBeingScheduledOnSameNodeAsAPI: true
   scaling:
     maxReplicaCount: 10
     scaledComponents:

@@ -151,13 +151,15 @@ Documentation: https://cloud.google.com/sql/docs/mysql/connect-kubernetes-engine
 {{- define "avatar.db_proxy_container" }}
 {{- if $.Values.gcp.dbInstanceConnectionName }}
         - name: cloud-sql-proxy
-          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.5.0 # make sure the use the latest version
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.8.1-bullseye # make sure the use the latest version
+          lifecycle:
+            preStop:
+              exec:
+                command: ["/bin/sh", "-c", "sleep 30"]
           command:
             - "/cloud-sql-proxy"
             - "--auto-ip"
             - "--quitquitquit"
-            # Unused for now
-            # - "-enable_iam_login"
             - "{{ $.Values.gcp.dbInstanceConnectionName }}"
           securityContext:
             runAsNonRoot: true
@@ -165,6 +167,5 @@ Documentation: https://cloud.google.com/sql/docs/mysql/connect-kubernetes-engine
             requests:
               memory: "1Gi"
               cpu:    "1"
-
 {{- end }}
 {{- end }}

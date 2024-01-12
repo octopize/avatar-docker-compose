@@ -85,6 +85,8 @@ spec:
             {{ if .Values.debug.storage.useLocal }}
             - name: USER_ID
               value: "1000"
+            - name: USE_CONSOLE_LOGGING
+              value: "True"
             {{ end }}
           ports:
             - name: api

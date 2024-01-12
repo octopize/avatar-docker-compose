@@ -7,6 +7,7 @@ metadata:
 
 spec:
   # Link to Kubernetes Job spec documentation: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/job-v1/#JobSpec
+  # Link to the KEDA Scaling Jobs https://keda.sh/docs/2.12/concepts/scaling-jobs/
   jobTargetRef:
     # We set 'parallelism' and 'completions' to 1 as we want one pod to be running a single celery task and then terminate
     parallelism: 1 # one avatar task -> one worker -> one pod
@@ -43,6 +44,7 @@ spec:
                   values:
                   - {{ $component.preferredNodeType | quote }}   
         {{ end }}
+        {{ if $.Values.worker.preventPodsFromBeingScheduledOnSameNodeAsAPI }}
           podAntiAffinity:
           # We set a 'podAntiAffinity' for the Jobs so that they don't get scheduled on the 
           # same node as the API, as node scale down might bring down the API, 
@@ -55,6 +57,7 @@ spec:
                   values:
                   - api
               topologyKey: "kubernetes.io/hostname"
+        {{ end }}
         serviceAccountName: {{ $.Values.gcp.ksaName | default "" | quote }}
         # We set the !CONTAINER! 'restartPolicy' to Never as if the pod fails during Job execution, the Job will be marked as JobStatus.KILLED or
         # JobStatus.FAILURE, and we do not want to restart the container as no task would be in the queue
@@ -85,8 +88,7 @@ spec:
               # nodes communicating with each other.
             - "/bin/bash"
             - "-c"
-            - >- 
-              ./catch_celery_shutdown_message.sh
+            - |
               celery -A api.lib.task worker --loglevel=info --without-mingle --without-gossip --pool=prefork --concurrency=1 -Q {{ $component.queue  }}; 
               {{- if $.Values.gcp.dbInstanceConnectionName }}
               curl --silent --show-error --retry 3 --retry-connrefused -X POST localhost:9091/quitquitquit
@@ -100,7 +102,14 @@ spec:
                 cpu: 1000m
             env:
             {{- include "avatar.app_env" $ }}
+            # We do not want for celery to wait for long running tasks to finish, which is the default
+            # behavior for SIGTERM. We want to use SIGQUIT instead, which initiates a Cold Shutdown,
+            # and does not wait for tasks to finish.
             - name: SHOULD_SHUTDOWN_AFTER_ONE_TASK
+              value: "True"
+            - name: REMAP_SIGTERM
+              value: "SIGQUIT"
+            - name: USE_CONSOLE_LOGGING
               value: "True"
           {{ if $.Values.debug.storage.useLocal }}
             - name: USER_ID
@@ -132,6 +141,9 @@ spec:
           runAsUser: 0
       {{ end }}
 
+
+  rollout:
+    strategy: gradual # With this, we do not kill existing workers when updating the chart
   pollingInterval: 5 # in seconds
   # We set 'minReplicaCount' to 0 because we don't want to have any worker running when there is no task.
   # The tradeoff is that we will take longer to react to the first task being set.
@@ -141,6 +153,7 @@ spec:
   # - pod scheduling on a node
   # - downloading container image if not present
   # - container startup time
+  # minReplicaCount: 1
   maxReplicaCount: {{ $.Values.worker.scaling.maxReplicaCount }}
   successfulJobsHistoryLimit: 5
   failedJobsHistoryLimit: 10

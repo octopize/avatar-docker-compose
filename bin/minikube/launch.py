@@ -40,11 +40,12 @@ DEFAULT_AUTHENTICATION_KIND = AuthKind.USERNAME
 DEFAULT_ORGANIZATION_NAME = "octopize"
 DEFAULT_SHARED_STORAGE_PATH = "/home/avatar/shared"
 DEFAULT_SHOULD_USE_LOCAL_STORAGE = True
+DEFAULT_LOG_LEVEL = "INFO"
 
 DEFAULT_DB_NAME = "avatar"
 
 DEFAULT_USERNAME = "avatar_admin"
-DEFAULT_WORKER_MEMORY_REQUEST = "4Gi"
+DEFAULT_WORKER_MEMORY_REQUEST = "2Gi"
 DEFAULT_API_MEMORY_REQUEST = "1Gi"
 DEFAULT_PDFGENERATOR_MEMORY_REQUEST = "2Gi"
 DEFAULT_WORKER_CPU_REQUEST = "1000m"
@@ -110,6 +111,8 @@ class AvatarHelmConfig(HelmConfig):
     organization_name: str
     authentication: Authentication
     is_telemetry_enabled: bool
+    log_level: str
+
     is_sentry_enabled: bool
 
     pdfgenerator_version: str
@@ -164,6 +167,7 @@ KEY_MAPPING = {
     "pdfgeneratorVersion": "pdfgenerator_version",
     "api.isTelemetryEnabled": "is_telemetry_enabled",
     "api.isSentryEnabled": "is_sentry_enabled",
+    "api.logLevel": "log_level",
     "api.organizationName": "organization_name",
     "api.sharedStoragePath": "shared_storage_path",
     "resources.workerMemoryRequest": "worker_memory_request",
@@ -450,6 +454,10 @@ def create_cluster(
         "--enable-sentry",
         help="Whether or not error monitoring using Sentry is enabled.",
     ),
+    log_level: str = typer.Option(
+        DEFAULT_LOG_LEVEL,
+        help="Log level of the API. Can be one of DEBUG, INFO, WARNING, ERROR, CRITICAL.",
+    ),
     worker_memory_request: str = typer.Option(
         DEFAULT_WORKER_MEMORY_REQUEST,
         help="Amount of memory to allocate to a avatar-worker pod.",
@@ -476,7 +484,18 @@ def create_cluster(
     with_keda: bool = typer.Option(True, help="Use KEDA autoscaling.", is_flag=True),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ) -> None:
-    """Create a complete cluster able to run the Avatar API"""
+    """Create a complete cluster able to run the Avatar API.
+    
+    
+    
+    Usage with defaults:
+    
+    DOCKER_PULL_SECRET=$(op read "op://Tech Eng/DOCKER_PULL_SECRET/password")\
+    AWS_ACCESS_KEY_ID=$(op read "op://Tech Eng/AWS email sending user/Section_0456E376214A4046BF2664B5BA0EE8B8/Access Key ID")\
+    AWS_SECRET_ACCESS_KEY=$(op read "op://Tech Eng/AWS email sending user/Section_0456E376214A4046BF2664B5BA0EE8B8/Secret Access key")\
+    RELEASE_NAME=avatar\
+        poetry run python launch.py create-cluster
+    """
 
     namespace = namespace or f"avatar-ns-{secrets.token_hex(2)}"
     typer.echo(f"Using namespace={namespace}")
@@ -522,6 +541,7 @@ def create_cluster(
         organization_name=organization_name,
         is_telemetry_enabled=is_telemetry_enabled,
         is_sentry_enabled=is_sentry_enabled,
+        log_level=log_level,
         worker_memory_request=worker_memory_request,
         api_memory_request=api_memory_request,
         pdfgenerator_memory_request=pdfgenerator_memory_request,
@@ -774,11 +794,16 @@ def create_redis(
     typer.echo(f"Redis setup! release_name={redis_release}")
 
     redis_host = f"{redis_release}-master.{namespace}.svc.cluster.local"
-    return RedisResult(
+    result =  RedisResult(
         redis_host=redis_host,
         release_name=redis_release,
         namespace=namespace,
     )
+
+    save_result(result)
+
+    return result
+
 
 
 @app.command()
@@ -856,6 +881,10 @@ def create_avatar(
         DEFAULT_IS_SENTRY_ENABLED,
         "--enable-sentry",
         help="Whether or not error monitoring using Sentry is enabled.",
+    ),
+    log_level: str = typer.Option(
+        DEFAULT_LOG_LEVEL,
+        help="Log level of the API. Can be one of DEBUG, INFO, WARNING, ERROR, CRITICAL.",
     ),
     worker_memory_request: str = typer.Option(
         DEFAULT_WORKER_MEMORY_REQUEST,
@@ -938,6 +967,7 @@ def create_avatar(
         authentication=authentication,
         is_telemetry_enabled=is_telemetry_enabled,
         is_sentry_enabled=is_sentry_enabled,
+        log_level=log_level,
         worker_memory_request=worker_memory_request,
         api_memory_request=api_memory_request,
         pdfgenerator_memory_request=pdfgenerator_memory_request,
@@ -960,9 +990,27 @@ def create_avatar(
     upgrade_or_install = "install" if not should_upgrade_only else "upgrade"
     flags = ["--create-namespace", "--debug"]
     namespace_command = ["--namespace", config.namespace]
-    using_keda_autoscaling = (
-        ["--set", "worker.useKedaAutoscaler=true"] if config.with_keda else []
-    )
+
+    using_keda_autoscaling = []
+    if config.with_keda:
+        using_keda_autoscaling = ["--set", "worker.useKedaAutoscaler=true"]
+        using_keda_autoscaling.extend(
+            [
+                "--set",
+                f"worker.scaling.scaledComponents[0].memoryRequest={worker_memory_request}",
+                "--set",
+                f"worker.scaling.scaledComponents[0].queue=medium",  # prevent overriding of values.yaml # noqa: E501
+                "--set",
+                f"worker.scaling.scaledComponents[1].memoryRequest={worker_memory_request}",
+                "--set",
+                f"worker.scaling.scaledComponents[1].queue=huge",  # prevent overriding  of values.yaml # noqa: E501
+                "--set",
+                # minikube has only one type of node, so we need to disable this
+                f"worker.preventPodsFromBeingScheduledOnSameNodeAsAPI=false",
+            ]
+        )
+
+
     using_local_storage = ["--set", "debug.storage.useLocal=true"]
 
     values = list(

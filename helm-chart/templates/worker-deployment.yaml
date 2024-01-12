@@ -71,6 +71,8 @@ spec:
             {{ if .Values.debug.storage.useLocal }}
             - name: USER_ID
               value: "1000"
+            - name: GROUP_ID
+              value: "1000"
             {{ end }}
       imagePullSecrets:
         - name: docker-local-pull-secret

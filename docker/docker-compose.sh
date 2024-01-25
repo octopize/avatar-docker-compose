@@ -15,6 +15,8 @@ set -x
 
 
 export USER_ID=${USER_ID-$(id -u)}
+export GROUP_ID=${GROUP_ID-$(id -g)}
+
 export SECRETS_DIR="${SECRETS_DIR:-.secrets}"
 export AVATAR_API_VERSION=${AVATAR_API_VERSION-latest}
 export AVATAR_PDFGENERATOR_VERSION=${AVATAR_PDFGENERATOR_VERSION-latest}

@@ -38,6 +38,8 @@ services:
       IS_TELEMETRY_ENABLED: ${IS_TELEMETRY_ENABLED}
       IS_SENTRY_ENABLED: ${IS_SENTRY_ENABLED}
       USER_ID: ${USER_ID} # user id of the user executing the container
+      GROUP_ID: ${GROUP_ID} # group id of the user executing the container
+
 
     secrets:
       - db_name
@@ -80,6 +82,7 @@ services:
       IS_TELEMETRY_ENABLED: ${IS_TELEMETRY_ENABLED}
       IS_SENTRY_ENABLED: ${IS_SENTRY_ENABLED}
       USER_ID: ${USER_ID} # user id of the user executing the container
+      GROUP_ID: ${GROUP_ID} # group id of the user executing the container
       # SHARED_STORAGE_PATH should only be set when using non-filesystem based storage.
       # It's best to let the API choose the default location for filesystem storage
       # on the container.
@@ -118,6 +121,7 @@ services:
       IS_SENTRY_ENABLED: ${IS_SENTRY_ENABLED}
       SHARED_STORAGE_PATH: ${SHARED_STORAGE_PATH}
       USER_ID: ${USER_ID} # user id of the user executing the container
+      GROUP_ID: ${GROUP_ID} # group id of the user executing the container
 
   db:
     image: postgres:14.0

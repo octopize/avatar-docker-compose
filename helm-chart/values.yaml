@@ -6,7 +6,7 @@ image:
 
 # The image tag version. It's a good idea to pin it to something specific.
 # Avoid using "latest".
-avatarVersion: 0.5.21-rc.beta.6
+avatarVersion: 0.5.22
 pdfgeneratorVersion: 0.1.4
 
 # Octopize will provide you with this, it should be base64 encoded.

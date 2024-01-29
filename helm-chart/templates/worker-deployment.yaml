@@ -17,6 +17,7 @@ spec:
         {{- include "avatar.labels" . | nindent 8 }}
         app.kubernetes.io/component: worker
     spec:
+      terminationGracePeriodSeconds: 3600 # We set it that high because we want to give the pod enough time to finish the task
       serviceAccountName: {{ .Values.gcp.ksaName | default "" | quote }}
       tolerations:
         # Allow this pod to be scheduled on tainted nodes with a key of "highMemory"
@@ -52,13 +53,26 @@ spec:
           #
           # We are using 'args' and not 'command' as we want to use the entrypoint of the Dockerfile https://stackoverflow.com/a/49657024
           args: 
-            # The following syntax is so that we don't have to have every argument separated with a comma in a list
-            # and that we can go to a newline that will later be transformed into a space
-            - "/bin/bash"
-            - "-c"
-            - >-
-              celery -A api.lib.task worker --loglevel=info --pool=solo --concurrency=4 
-              {{- if .Values.worker.useKedaAutoscaler }} -Q celery,small {{- end }}
+            # /quitquitquit is to shutdown the cloud-sql-proxy sidecar when the job terminates.
+            # TODO: Replace the call to /quitquitquit when built-in support for Sidecar Containers is enabled
+            # See https://github.com/kubernetes/enhancements/issues/753
+            #
+            # We set --without-mingle and --without-gossip because we don't want the workers on different
+            # nodes communicating with each other.
+            #
+            # We use trap to forward the signals to the celery process with trap.
+            - /bin/bash
+            - -c
+            - |
+              celery -A api.lib.task worker --loglevel=info --without-mingle --without-gossip --pool=prefork --concurrency=4 {{- if .Values.worker.useKedaAutoscaler }} -Q celery,small {{- end }} &
+              CELERY_PID=$!
+              trap 'kill -TERM $CELERY_PID' SIGTERM
+              trap 'kill -KILL $CELERY_PID' SIGKILL
+              wait $CELERY_PID
+              {{- if $.Values.gcp.dbInstanceConnectionName }}
+              sleep 10 # Give celery a few seconds to shutdown and cleanup
+              curl --silent --show-error --retry 3 --retry-connrefused -X POST localhost:9091/quitquitquit
+              {{- end }}
           resources:
             requests:
               memory: {{ .Values.resources.workerMemoryRequest }}

@@ -155,7 +155,7 @@ Documentation: https://cloud.google.com/sql/docs/mysql/connect-kubernetes-engine
           lifecycle:
             preStop:
               exec:
-                command: ["/bin/sh", "-c", "sleep 30"]
+                command: ["/bin/sh", "-c", "sleep 3605"] # sleep for `terminationGracePeriodSeconds` + 5
           command:
             - "/cloud-sql-proxy"
             - "--auto-ip"

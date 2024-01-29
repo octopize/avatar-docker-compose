@@ -27,6 +27,7 @@ spec:
           {{- include "avatar.labels" $ | nindent 10 }}
           app.kubernetes.io/component: job
       spec:
+        terminationGracePeriodSeconds: 3600 # We set it that high because we want to give the pod enough time to finish the task
         tolerations:
           # Allow this pod to be scheduled on tainted nodes with a key of "highMemory"
           # https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration
@@ -86,11 +87,18 @@ spec:
               #
               # We set --without-mingle and --without-gossip because we don't want the workers on different
               # nodes communicating with each other.
-            - "/bin/bash"
-            - "-c"
+              #
+              # We use trap to forward the signals to the celery process with trap.
+            - /bin/bash
+            - -c
             - |
-              celery -A api.lib.task worker --loglevel=info --without-mingle --without-gossip --pool=prefork --concurrency=1 -Q {{ $component.queue  }}; 
+              celery -A api.lib.task worker --loglevel=info --without-mingle --without-gossip --pool=prefork --concurrency=1 -Q {{ $component.queue }} &
+              CELERY_PID=$!
+              trap 'kill -TERM $CELERY_PID' SIGTERM
+              trap 'kill -KILL $CELERY_PID' SIGKILL
+              wait $CELERY_PID
               {{- if $.Values.gcp.dbInstanceConnectionName }}
+              sleep 10 # Give celery a few seconds to shutdown and cleanup
               curl --silent --show-error --retry 3 --retry-connrefused -X POST localhost:9091/quitquitquit
               {{- end }}
             resources:
@@ -144,7 +152,7 @@ spec:
 
   rollout:
     strategy: gradual # With this, we do not kill existing workers when updating the chart
-  pollingInterval: 5 # in seconds
+  pollingInterval: 15 # in seconds
   # We set 'minReplicaCount' to 0 because we don't want to have any worker running when there is no task.
   # The tradeoff is that we will take longer to react to the first task being set.
   # The complete startup time is measured as the sum of

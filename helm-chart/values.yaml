@@ -22,7 +22,7 @@ dbPassword: ""
 
 resources:
   apiReplicas: 1
-  workerReplicas: 2
+  workerReplicas: 1
   pdfgeneratorReplicas: 1
   workerMemoryRequest: "32Gi"
   apiMemoryRequest: "4Gi"

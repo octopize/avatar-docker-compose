@@ -117,8 +117,6 @@ spec:
               value: "True"
             - name: REMAP_SIGTERM
               value: "SIGQUIT"
-            - name: USE_CONSOLE_LOGGING
-              value: "True"
           {{ if $.Values.debug.storage.useLocal }}
             - name: USER_ID
               value: "1000"
@@ -161,7 +159,6 @@ spec:
   # - pod scheduling on a node
   # - downloading container image if not present
   # - container startup time
-  # minReplicaCount: 1
   maxReplicaCount: {{ $.Values.worker.scaling.maxReplicaCount }}
   successfulJobsHistoryLimit: 5
   failedJobsHistoryLimit: 10

@@ -87,8 +87,6 @@ spec:
             # and does not wait for tasks to finish.
             - name: REMAP_SIGTERM
               value: "SIGQUIT"
-            - name: USE_CONSOLE_LOGGING
-              value: "True"
             {{ if .Values.debug.storage.useLocal }}
             - name: USER_ID
               value: "1000"

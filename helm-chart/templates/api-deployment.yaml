@@ -87,6 +87,8 @@ spec:
               value: "1000"
             - name: GROUP_ID
               value: "1000"
+            - name: USE_CONSOLE_LOGGING
+              value: "True"
             {{ end }}
           ports:
             - name: api

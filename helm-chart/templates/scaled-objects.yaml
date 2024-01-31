@@ -110,7 +110,7 @@ spec:
                 cpu: 1000m
             env:
             {{- include "avatar.app_env" $ }}
-            # We do not want for celery to wait for long running tasks to finish, which is the default
+            # We do not want celery to wait for long running tasks to finish, which is the default
             # behavior for SIGTERM. We want to use SIGQUIT instead, which initiates a Cold Shutdown,
             # and does not wait for tasks to finish.
             - name: SHOULD_SHUTDOWN_AFTER_ONE_TASK

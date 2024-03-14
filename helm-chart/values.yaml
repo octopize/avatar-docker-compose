@@ -39,6 +39,9 @@ resources:
 redisHost: "127.0.0.1"
 redisPort: 6379
 
+pdfgenerator:
+  tolerations: [] # example: [{key: "exampleKey", operator: "Exists"}]
+# TODO: Nest these in a pdfgenerator: subsection
 pdfgeneratorHost: "avatar-pdf"
 pdfgeneratorPort: 8001
 
@@ -64,8 +67,16 @@ debug:
     useLocal: false
 
 worker:
-  useKedaAutoscaler: false
+  # These are the tolerations for the worker-deplotment.yaml that runs continuously
+  # on a specific node.
+  tolerations: [{key: "highMemory", operator: "Exists"}] # example: [{key: "exampleKey", operator: "Exists"}]
   preventPodsFromBeingScheduledOnSameNodeAsAPI: true
+
+  # If true, the worker will use KEDA to autoscale the number of pods based on the number of tasks in the queue.
+  useKedaAutoscaler: false
+
+  # The following values are used to set the configuration options for the autoscaling.
+  # Only used if useKedaAutoscaler is true.
   scaling:
     maxReplicaCount: 10
     scaledComponents:
@@ -73,13 +84,19 @@ worker:
         preferredNodeType: ""
         memoryRequest: "32Gi"
         queue: "medium"
+        tolerations: [{key: "highMemory", operator: "Exists"}] # example: [{key: "exampleKey", operator: "Exists"}]
       - identifier: "huge"
         preferredNodeType: ""
         memoryRequest: "64Gi"
         queue: "huge"
-
+        tolerations: [{key: "highMemory", operator: "Exists"}] # example: [{key: "exampleKey", operator: "Exists"}]
 
 api:
+  tolerations: [] # example: [{key: "exampleKey", operator: "Exists"}]
+  # TODO: Nest all of these in a config: subsection,
+  #       as this is the config that is used for the API app,
+  #       not only the API deployment/pod.
+  #       This will require modifying the values in the pulumi program
   # Externally accessible API url (should be with https)
   baseUrl: https://avatar.yourcompany.com
 

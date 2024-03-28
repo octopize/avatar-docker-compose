@@ -28,10 +28,11 @@ spec:
           app.kubernetes.io/component: job
       spec:
         terminationGracePeriodSeconds: 3600 # We set it that high because we want to give the pod enough time to finish the task
-        {{- if $component.tolerations }}
         tolerations:
-          {{- toYaml $component.tolerations | nindent 10 }}
-        {{ end -}}
+          # Allow this pod to be scheduled on tainted nodes with a key of "highMemory"
+          # https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration
+        - key: "highMemory"
+          operator: "Exists"
         affinity:
         # Force this pod to be scheduled on a node with the appropriate key defined in `preferredNodeType`.
         {{ if $component.preferredNodeType }}

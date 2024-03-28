@@ -17,10 +17,6 @@ spec:
         {{- include "avatar.labels" . | nindent 8 }}
         app.kubernetes.io/component: pdfgenerator
     spec:
-      {{- if .Values.pdfgenerator.tolerations }}
-      tolerations:
-        {{- toYaml .Values.pdfgenerator.tolerations | nindent 8 }}
-      {{ end -}}
       {{ if .Values.resources.pdfgeneratorPreferredNodeType }}
       affinity:
         nodeAffinity:

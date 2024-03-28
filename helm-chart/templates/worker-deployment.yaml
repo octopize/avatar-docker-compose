@@ -19,10 +19,11 @@ spec:
     spec:
       terminationGracePeriodSeconds: 3600 # We set it that high because we want to give the pod enough time to finish the task
       serviceAccountName: {{ .Values.gcp.ksaName | default "" | quote }}
-      {{- if .Values.worker.tolerations }}
       tolerations:
-        {{- toYaml .Values.worker.tolerations | nindent 8 }}
-      {{ end -}}
+        # Allow this pod to be scheduled on tainted nodes with a key of "highMemory"
+        # https://kubernetes.io/docs/concepts/scheduling-eviction/taint-and-toleration
+      - key: "highMemory"
+        operator: "Exists"
       {{ if .Values.resources.workerPreferredNodeType }}
       affinity:
         nodeAffinity:

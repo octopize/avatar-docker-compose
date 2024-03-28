@@ -18,10 +18,6 @@ spec:
         # Do not modify the following label without modifying the `podAffinity` of other objects.
         app.kubernetes.io/component: api
     spec:
-      {{- if .Values.api.tolerations }}
-      tolerations:
-        {{- toYaml .Values.api.tolerations | nindent 8 }}
-      {{ end -}}
       {{ if .Values.resources.apiPreferredNodeType }}
       affinity:
         nodeAffinity:

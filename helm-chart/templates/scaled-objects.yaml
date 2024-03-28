@@ -31,7 +31,8 @@ spec:
         {{- if $component.tolerations }}
         tolerations:
           {{- toYaml $component.tolerations | nindent 10 }}
-        {{ end -}}
+        {{ end }}
+
         affinity:
         # Force this pod to be scheduled on a node with the appropriate key defined in `preferredNodeType`.
         {{ if $component.preferredNodeType }}

@@ -4,6 +4,8 @@ apiVersion: keda.sh/v1alpha1
 kind: ScaledJob
 metadata:
   name: avatar-job-{{ $component.queue }}
+  labels:
+    {{- include "avatar.labels" . | nindent 4 }}
 
 spec:
   # Link to Kubernetes Job spec documentation: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/job-v1/#JobSpec
@@ -151,7 +153,7 @@ spec:
   rollout:
     strategy: gradual # With this, we do not kill existing workers when updating the chart
   pollingInterval: 15 # in seconds
-  # We set 'minReplicaCount' to 0 because we don't want to have any worker running when there is no task.
+  # We set 'minReplicaCount' to 0 (default) because we don't want to have any worker running when there is no task.
   # The tradeoff is that we will take longer to react to the first task being set.
   # The complete startup time is measured as the sum of
   # - pollingInterval

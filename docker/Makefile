@@ -41,7 +41,7 @@ $(SECRETS_DIR)/authjwt_secret_key:
 
 $(SECRETS_DIR)/file_encryption_key:
 	mkdir -p $(SECRETS_DIR)
-	python -c "import base64; import os; print(str(base64.urlsafe_b64encode(os.urandom(32)), encoding='utf-8'), end='')" > $@
+	python3 -c "import base64; import os; print(str(base64.urlsafe_b64encode(os.urandom(32)), encoding='utf-8'), end='')" > $@
 
 $(SECRETS_DIR)/avatar_first_user_password:
 	mkdir -p $(SECRETS_DIR)

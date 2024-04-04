@@ -168,6 +168,16 @@ services:
     logging: *default-logging
     restart: on-failure:10
 
+  notebook-server:
+    image: quay.io/octopize/notebook-server:${AVATAR_NOTEBOOK_SERVER_VERSION}
+    logging: *default-logging
+    restart: on-failure:10
+    profiles: ["with-notebook"]
+    ports:
+      - "8888:8888"
+    environment:
+      BASE_API_URL: ${BASE_API_URL}
+
 secrets:
   db_password:
     file: ${SECRETS_DIR-.secrets}/db_password

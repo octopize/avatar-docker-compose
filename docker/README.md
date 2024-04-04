@@ -18,3 +18,14 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/octopize/avat
 cd avatar-deployment
 git sparse-checkout set docker
 ```
+
+## Create secrets
+
+The Makefile contains a target to generate the necessary secrets for the deployment. Run the following command to generate the secrets. Some of them are pre-filled with default values.
+
+```bash
+# If using email based authentication
+make secrets-with-email-auth
+# If using username based authentication
+make secrets-with-username-auth
+```

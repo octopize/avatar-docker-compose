@@ -1,0 +1,21 @@
+{
+    auto_https disable_redirects
+}
+
+# API
+{$BASE_API_URL} {
+    {$CADDY_TLS_CONFIG}
+
+    reverse_proxy api:8000
+
+    # Most of those headers are also defined at the application level as well.
+    header {
+        ?Permissions-Policy interest-cohort=()
+        ?Strict-Transport-Security max-age=31536000; preload
+        ?X-Content-Type-Options nosniff
+        ?X-Frame-Options DENY
+        ?Referrer-Policy no-referrer-when-downgrade
+        ?Content-Security-Policy "default-src 'none'"
+    }
+}
+

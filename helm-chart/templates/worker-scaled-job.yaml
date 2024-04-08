@@ -5,7 +5,7 @@ kind: ScaledJob
 metadata:
   name: avatar-job-{{ $component.queue }}
   labels:
-    {{- include "avatar.labels" . | nindent 4 }}
+    {{- include "avatar.labels" $ | nindent 4 }}
 
 spec:
   # Link to Kubernetes Job spec documentation: https://kubernetes.io/docs/reference/kubernetes-api/workload-resources/job-v1/#JobSpec

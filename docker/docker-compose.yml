@@ -62,7 +62,7 @@ services:
       - clevercloud_sso_salt
 
   worker:
-    image: quay.io/octopize/api:latest
+    image: quay.io/octopize/api:${AVATAR_API_VERSION}
     platform: linux/x86_64
     restart: on-failure:10
     logging: *default-logging
@@ -177,6 +177,8 @@ services:
       - "8888:8888"
     environment:
       BASE_API_URL: ${BASE_API_URL}
+    volumes:
+      - notebook-server-data:/app # store the whole contents of the notebook server in a volume
 
 secrets:
   db_password:
@@ -219,3 +221,5 @@ volumes:
   postgres_data:
     name: avatar_postgres_data
     external: true
+  notebook-server-data:
+    name: avatar_notebook_server_data

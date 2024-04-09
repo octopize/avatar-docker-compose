@@ -1,0 +1,25 @@
+{{- if .Values.worker.useKedaAutoscaler }}
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: avatar-worker-keda-autoscaler
+  labels:
+    {{- include "avatar.labels" . | nindent 4 }}
+
+spec:
+  scaleTargetRef:
+    kind: Deployment
+    name: avatar-worker
+    envSourceContainerName: avatar-worker # container from which to take environment variables from
+  pollingInterval: 30
+  cooldownPeriod:  300
+  minReplicaCount: 1
+  maxReplicaCount: {{ .Values.worker.scaling.maxReplicaCount }}
+  triggers:
+    - type: redis
+      metadata:
+        address: {{ $.Values.redisHost }}:{{ $.Values.redisPort }}
+        databaseIndex: "0"
+        listName: {{ .Values.worker.scaling.workerDeploymentListIdentifier | quote  }}
+        listLength: {{ .Values.worker.scaling.workerDeploymentNbWaitingTasksThreshold | quote }}
+{{- end }}

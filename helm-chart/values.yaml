@@ -79,6 +79,8 @@ worker:
   # Only used if useKedaAutoscaler is true.
   scaling:
     maxReplicaCount: 10
+    workerDeploymentListIdentifier: "small"
+    workerDeploymentNbWaitingTasksThreshold: "4"
     scaledComponents:
       - identifier: "medium"
         preferredNodeType: ""

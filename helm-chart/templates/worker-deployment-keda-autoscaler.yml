@@ -1,3 +1,4 @@
+{{- if .Values.worker.useKedaAutoscaler }}
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -10,14 +11,15 @@ spec:
     kind: Deployment
     name: avatar-worker
     envSourceContainerName: avatar-worker # container from which to take environment variables from
-  pollingInterval: 30                                # Optional. Default: 30 seconds
-  cooldownPeriod:  300                               # Optional. Default: 300 seconds
+  pollingInterval: 30
+  cooldownPeriod:  300
   minReplicaCount: 1
-  maxReplicaCount: 10
+  maxReplicaCount: {{ .Values.worker.scaling.maxReplicaCount }}
   triggers:
     - type: redis
       metadata:
         address: {{ $.Values.redisHost }}:{{ $.Values.redisPort }}
         databaseIndex: "0"
-        listName: "small"
-        listLength: "30" # each replica is supposed to handle 30 messages
+        listName: {{ .Values.worker.scaling.workerDeploymentListIdentifier | quote  }}
+        listLength: {{ .Values.worker.scaling.workerDeploymentNbWaitingTasksThreshold | quote }}
+{{- end }}

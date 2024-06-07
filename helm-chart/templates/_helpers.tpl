@@ -165,7 +165,7 @@ Documentation: https://cloud.google.com/sql/docs/mysql/connect-kubernetes-engine
             runAsNonRoot: true
           resources:
             requests:
-              memory: "1Gi"
-              cpu:    "1"
+              memory: "256Mi"
+              cpu:    "100m"
 {{- end }}
 {{- end }}

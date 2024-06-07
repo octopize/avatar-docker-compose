@@ -13,7 +13,7 @@ spec:
     envSourceContainerName: avatar-worker # container from which to take environment variables from
   pollingInterval: 30
   cooldownPeriod:  300
-  minReplicaCount: 1
+  minReplicaCount: {{ .Values.resources.workerReplicas }}
   maxReplicaCount: {{ .Values.worker.scaling.maxReplicaCount }}
   triggers:
     - type: redis

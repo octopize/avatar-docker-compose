@@ -64,7 +64,7 @@ spec:
             - /bin/bash
             - -c
             - |
-              celery -A api.lib.task worker --loglevel=info --without-mingle --without-gossip --pool=prefork {{- if .Values.worker.useKedaAutoscaler }} -Q celery,{{ .Values.worker.scaling.workerDeploymentListIdentifier }} {{- end }} &
+              celery -A api.lib.task worker --loglevel=info --without-mingle --without-gossip --pool=prefork  {{- if .Values.worker.concurrency }} --concurrency={{ .Values.worker.concurrency }} {{- end }} {{- if .Values.worker.useKedaAutoscaler }} -Q celery,{{ .Values.worker.scaling.workerDeploymentListIdentifier }} {{- end }} &
               CELERY_PID=$!
               trap 'kill -TERM $CELERY_PID' SIGTERM
               trap 'kill -KILL $CELERY_PID' SIGKILL

@@ -67,13 +67,14 @@ debug:
     useLocal: false
 
 worker:
-  # These are the tolerations for the worker-deplotment.yaml that runs continuously
+  # These are the tolerations for the worker-deployment.yaml that runs continuously
   # on a specific node.
   tolerations: [{key: "highMemory", operator: "Exists"}] # example: [{key: "exampleKey", operator: "Exists"}]
   preventPodsFromBeingScheduledOnSameNodeAsAPI: true
 
   # If true, the worker will use KEDA to autoscale the number of pods based on the number of tasks in the queue.
   useKedaAutoscaler: false
+  concurrency: ""
 
   # The following values are used to set the configuration options for the autoscaling.
   # Only used if useKedaAutoscaler is true.

@@ -40,6 +40,8 @@ spec:
         - name: avatar-worker
           image: quay.io/octopize/api:{{ .Values.avatarVersion }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            privileged: true
           volumeMounts:
             - mountPath: /var/run/secrets
               name: secrets

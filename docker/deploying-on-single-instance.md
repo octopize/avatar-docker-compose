@@ -2,7 +2,7 @@
 
 ## Objective of this document
 
-This documents lays out how to deploy the stack on a single instance. For env-specific information (per client, our demo instance, etc.), checkout [Deploying prod](./deploying-prod.md).
+This documents lays out how to deploy the stack on a single instance.
 
 ## Manual
 

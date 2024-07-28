@@ -9,9 +9,10 @@ x-logging: &default-logging
 services:
   api:
     image: quay.io/octopize/api:${AVATAR_API_VERSION}
-    platform: linux/x86_64
-    restart: on-failure:10
+    restart: &default-restart on-failure:10
+    platform: &default-platform linux/x86_64
     logging: *default-logging
+    hostname: api
     volumes:
       - ${HOST_SHARED_STORAGE_PATH}:/home/${CONTAINER_USER_NAME-avatar}/shared # only used for local or on-premise
     healthcheck:
@@ -37,9 +38,9 @@ services:
       MAX_ALLOWED_LINES_PER_DATASET: ${MAX_ALLOWED_LINES_PER_DATASET}
       IS_TELEMETRY_ENABLED: ${IS_TELEMETRY_ENABLED}
       IS_SENTRY_ENABLED: ${IS_SENTRY_ENABLED}
+      COMPATIBILITY_MAPPING_FILEPATH: ${COMPATIBILITY_MAPPING_FILEPATH}
       USER_ID: ${USER_ID} # user id of the user executing the container
       GROUP_ID: ${GROUP_ID} # group id of the user executing the container
-
 
     secrets:
       - db_name
@@ -59,12 +60,13 @@ services:
       # - aws_mail_account_access_key_id
       # - aws_mail_account_secret_access_key
 
+      # If clevercloud is accessible
       - clevercloud_sso_salt
 
   worker:
     image: quay.io/octopize/api:${AVATAR_API_VERSION}
-    platform: linux/x86_64
-    restart: on-failure:10
+    platform: *default-platform
+    restart: *default-restart
     logging: *default-logging
     # celery defaults its concurrency to the number of CPUs available
     command: celery -A api.lib.task worker --loglevel=info
@@ -89,6 +91,7 @@ services:
       # Where this maps on the host side can be chosen with the HOST_SHARED_STORAGE_PATH
       # environment variable.
       SHARED_STORAGE_PATH: ${SHARED_STORAGE_PATH} # only specified when using something else than filesystem
+      REMAP_SIGTERM: "SIGQUIT" # Use SIGQUIT so that celery does a cold shutdown on SIGTERM
 
     depends_on:
       - api
@@ -103,8 +106,8 @@ services:
 
   cron:
     image: quay.io/octopize/api:${AVATAR_API_VERSION}
-    platform: linux/x86_64
-    restart: on-failure:10
+    platform: *default-platform
+    restart: *default-restart
     logging: *default-logging
     command: celery -A api.lib.task beat --loglevel=info -s /tmp/celerybeat-schedule
     depends_on:
@@ -116,16 +119,16 @@ services:
       CELERY_BROKER_URL: "redis://redis:6379/0"
       CELERY_RESULT_BACKEND: "redis://redis:6379/1"
       BASE_API_URL: ${BASE_API_URL}
+      SHARED_STORAGE_PATH: ${SHARED_STORAGE_PATH}
       PDFGENERATOR_URL: "http://pdfgenerator:8000/"
       IS_TELEMETRY_ENABLED: ${IS_TELEMETRY_ENABLED}
       IS_SENTRY_ENABLED: ${IS_SENTRY_ENABLED}
-      SHARED_STORAGE_PATH: ${SHARED_STORAGE_PATH}
       USER_ID: ${USER_ID} # user id of the user executing the container
       GROUP_ID: ${GROUP_ID} # group id of the user executing the container
 
   db:
     image: postgres:14.0
-    restart: on-failure:10
+    restart: *default-restart
     logging: *default-logging
     environment:
       # Appending any env variable with '_FILE' allows the file content to
@@ -142,16 +145,18 @@ services:
 
   web:
     image: quay.io/octopize/web:${AVATAR_WEB_VERSION}
+    restart: *default-restart
     profiles: ["with-web"]
 
   redis:
     image: redis:6.2.6-alpine
+    restart: *default-restart
     logging: *default-logging
 
   caddy:
     image: caddy:2.4.6-alpine
     logging: *default-logging
-    restart: on-failure:10
+    restart: *default-restart
     ports:
       - "443:443"
     environment:
@@ -166,19 +171,21 @@ services:
   pdfgenerator:
     image: quay.io/octopize/pdfgenerator:${AVATAR_PDFGENERATOR_VERSION}
     logging: *default-logging
-    restart: on-failure:10
+    restart: *default-restart
 
-  notebook-server:
-    image: quay.io/octopize/notebook-server:${AVATAR_NOTEBOOK_SERVER_VERSION}
-    logging: *default-logging
-    restart: on-failure:10
-    profiles: ["with-notebook"]
-    ports:
-      - "8888:8888"
-    environment:
-      BASE_API_URL: ${BASE_API_URL}
+
+  notebook-hub:
+    image: quay.io/octopize/notebook-hub:${AVATAR_NOTEBOOK_HUB_VERSION}
+    restart: *default-restart
+    container_name: jupyterhub
     volumes:
-      - notebook-server-data:/app # store the whole contents of the notebook server in a volume
+      # Bind Docker socket on the host so we can connect to the daemon from
+      # within the container
+      - "/var/run/docker.sock:/var/run/docker.sock:rw"
+      # Bind Docker volume on host for JupyterHub database and cookie secrets
+      - "notebook-hub-data:/data"
+    ports:
+      - "8002:8002"
 
 secrets:
   db_password:
@@ -210,6 +217,7 @@ secrets:
   # aws_mail_account_secret_access_key:
   #   file: ${SECRETS_DIR-.secrets}/aws_mail_account_secret_access_key
 
+  # If using clevercloud
   clevercloud_sso_salt:
     file: ${SECRETS_DIR-.secrets}/clevercloud_sso_salt
 
@@ -221,5 +229,5 @@ volumes:
   postgres_data:
     name: avatar_postgres_data
     external: true
-  notebook-server-data:
-    name: avatar_notebook_server_data
+  notebook-hub-data:
+    name: avatar_notebook_hub_data

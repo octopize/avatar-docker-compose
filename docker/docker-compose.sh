@@ -20,9 +20,9 @@ export GROUP_ID=${GROUP_ID-$(id -g)}
 export SECRETS_DIR="${SECRETS_DIR:-.secrets}"
 export AVATAR_API_VERSION=${AVATAR_API_VERSION-latest}
 export AVATAR_PDFGENERATOR_VERSION=${AVATAR_PDFGENERATOR_VERSION-latest}
-export AVATAR_NOTEBOOK_SERVER_VERSION=${AVATAR_NOTEBOOK_SERVER_VERSION-latest}
+export AVATAR_NOTEBOOK_HUB_VERSION=${AVATAR_NOTEBOOK_HUB_VERSION-latest}
 export DOCKER_BUILDKIT=1
 export COMPOSE_PROJECT_NAME=avatar
 export HOST_SHARED_STORAGE_PATH="${HOST_SHARED_STORAGE_PATH-./shared}"
 
-docker compose --env-file=.env -f "docker-compose.yml" "${args[@]}" $@
+docker compose --env-file=.env -f "docker-compose.yml" "${args[@]}" "$@"

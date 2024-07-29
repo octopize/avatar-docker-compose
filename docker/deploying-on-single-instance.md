@@ -50,12 +50,13 @@ This looks like the following
 1. You can clone the `avatar-deployment` repository to have a starting point. See instructions at [avatar-deployment/docker/README.md](https://github.com/octopize/avatar-deployment/blob/main/docker/README.md).
 2. Decide on the authentication method. You can use either username-based or email-based authentication. See [Setup authentication](#setup-authentication).
 3. Setup the database. See [Setup database](#setup-database).
-4. _Optional._ Setup compatibility. See [Setup compatibility](#setup-compatibility).
-5. _Optional._ Setup the storage location. See [Storage location](#storage-location).
-6. _Optional._ Setup HTTPS and certificates. See [Handling HTTPS and certificates](#handling-https-and-certificates).
-7. Setup access to the private image registry. See [Setting up access to the private image registry](#setting-up-access-to-the-private-image-registry).
-8. Create the volumes for the database and caddy. See [Starting the stack](#starting-the-stack).
-9. Start the stack. See [Starting the stack](#starting-the-stack).
+4. Modify environment variables. See [Setting up environment variables](#setting-up-environment-variables).
+5. _Optional._ Setup compatibility. See [Setup compatibility](#setup-compatibility).
+6. _Optional._ Setup the storage location. See [Storage location](#storage-location).
+7. _Optional._ Setup HTTPS and certificates. See [Handling HTTPS and certificates](#handling-https-and-certificates).
+8. Setup access to the private image registry. See [Setting up access to the private image registry](#setting-up-access-to-the-private-image-registry).
+9. Create the volumes for the database and caddy. See [Starting the stack](#starting-the-stack).
+10. Start the stack. See [Starting the stack](#starting-the-stack).
 
 ### Setup authentication
 
@@ -63,6 +64,8 @@ First, you have to decide whether the user will use username-based or email-base
 You'll have to slightly modify the `docker-compose.yml` file to select which secrets you want to use depending on the authentication method.
 
 You need to create a `.secrets` directory in the home directory of the user. This is already done by the Makefile in the `avatar-deployment` repository.
+
+You can call `make secrets-with-username-auth` or `make secrets-with-email-auth` to create the secrets files.
 
 Then, you need to fill in the following secrets:
 
@@ -82,6 +85,25 @@ If using email based authentication:
 We recommend using `octopize` as the organization name, and an octopize email for the first user.
 Later on, we can add more organizations/users through other command line scripts.
 
+### Setup database
+
+The database will be automatically created by the docker container. You just have to provide it the credentials in the `.secrets` directory.
+Fill in the following secrets:
+
+- `db_name`
+- `db_user`
+
+A password is already generated in `.secrets/db_password`. Preferably, you should NOT change it.
+
+### Setting up environment variables
+
+You can modify the `.env` file to set the environment variables. The following are the most important ones:
+
+```dotenv
+ENV_NAME=
+BASE_API_URL=
+```
+
 ### Setup compatibility
 
 Our stack uses a compatibility mapping on Google Cloud to make sure that the clients are compatible with the API.
@@ -95,16 +117,6 @@ In `.env`:
 ```dotenv
 COMPATIBILITY_MAPPING_FILEPATH=api/resources/compatibility_mapping.json
 ```
-
-### Setup database
-
-The database will be automatically created by the docker container. You just have to provide it the credentials in the `.secrets` directory.
-Fill in the following secrets:
-
-- `db_name`
-- `db_user`
-
-A password is already generated in `.secrets/db_password`. Preferably, you should NOT change it.
 
 ### Storage location
 

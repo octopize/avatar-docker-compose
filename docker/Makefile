@@ -7,6 +7,9 @@ MAKEFLAGS += --no-builtin-rules
 
 
 SECRETS_DIR := .secrets
+NOTEBOOK_PORT ?= 8888
+
+
 # File-based recipes
 
 common-secrets: $(SECRETS_DIR)/db_password $(SECRETS_DIR)/db_name $(SECRETS_DIR)/db_user $(SECRETS_DIR)/pepper $(SECRETS_DIR)/file_encryption_key $(SECRETS_DIR)/authjwt_secret_key $(SECRETS_DIR)/organization_name $(SECRETS_DIR)/clevercloud_sso_salt
@@ -17,6 +20,17 @@ secrets-with-username-auth: common-secrets $(SECRETS_DIR)/avatar_first_user_pass
 
 secrets-with-email-auth: common-secrets $(SECRETS_DIR)/admin_emails $(SECRETS_DIR)/aws_mail_account_access_key_id $(SECRETS_DIR)/aws_mail_account_secret_access_key ## Initialize secrets for email authentication
 .PHONY: secrets-with-email-auth
+
+
+launch-notebook-server:
+ifndef AVATAR_USERNAME
+	$(error AVATAR_USERNAME is not set)
+endif
+ifndef AVATAR_PASSWORD
+	$(error AVATAR_PASSWORD is not set)
+endif
+	docker run -p $(NOTEBOOK_PORT):$(NOTEBOOK_PORT) -e AVATAR_BASE_URL="http://api:8000" --net=avatar_default -e AVATAR_USERNAME=$(AVATAR_USERNAME)  -e AVATAR_PASSWORD=$(AVATAR_PASSWORD) --rm quay.io/octopize/notebook-server start-notebook.py --port=$(NOTEBOOK_PORT)	
+.PHONY: launch-notebook-server
 
 
 $(SECRETS_DIR)/db_password:

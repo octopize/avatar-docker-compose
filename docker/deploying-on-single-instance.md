@@ -2,7 +2,29 @@
 
 ## Objective of this document
 
-This documents lays out how to deploy the stack on a single instance.
+This documents lays out how to deploy the stack on a single instance. For env-specific information (per client, our demo instance, etc.), checkout [Deploying prod](./deploying-prod.md).
+
+## Preqrequisites
+
+- A server with Docker installed. We recommend using Ubuntu 20.04 LTS or later.
+- A domain name pointing to the server. This is necessary for HTTPS.
+- A certificate for the domain name. This is necessary for HTTPS.
+- User deploying should belong to the `docker` group. See [Post-installation steps for Linux](https://docs.docker.com/engine/install/linux-postinstall/).
+- A docker configuration file (either at `/etc/docker/daemon.json` or `~/.docker/config.json`) without proxies. This is necessary for the containers to connect to each other without going through the proxy. If the proxy is necessary to connect to the internet, you can add the `noProxy` field to the `~/.docker/config.json` and ignore the proxy for the docker network. By default, our network uses the following subnet: `172.18.0.0/16`.
+
+  ```json
+  {
+    "proxies": {
+      "default": {
+        "httpProxy": "http://proxy.example.com:80",
+        "httpsProxy": "http://proxy.example.com:80",
+        "noProxy": "172.18.0.0/16"
+      }
+    }
+  }
+  ```
+
+  > :point_right: NOTE: The configuration becomes active after saving the file, you don't need to restart Docker. However, the configuration only applies to new containers and builds, and doesn't affect existing containers.
 
 ## Manual
 

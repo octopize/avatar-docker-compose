@@ -13,6 +13,8 @@ services:
     platform: &default-platform linux/x86_64
     logging: *default-logging
     hostname: api
+    networks:
+      - default
     volumes:
       - ${HOST_SHARED_STORAGE_PATH}:/home/${CONTAINER_USER_NAME-avatar}/shared # only used for local or on-premise
     healthcheck:
@@ -51,7 +53,7 @@ services:
       - authjwt_secret_key
       - file_encryption_key
 
-      # If using username-email authentication
+      # If using username-password authentication
       - avatar_first_user_name
       - avatar_first_user_password
 
@@ -68,6 +70,9 @@ services:
     platform: *default-platform
     restart: *default-restart
     logging: *default-logging
+    hostname: worker
+    networks:
+      - default
     # celery defaults its concurrency to the number of CPUs available
     command: celery -A api.lib.task worker --loglevel=info
     environment:
@@ -109,6 +114,9 @@ services:
     platform: *default-platform
     restart: *default-restart
     logging: *default-logging
+    hostname: cron
+    networks:
+      - default
     command: celery -A api.lib.task beat --loglevel=info -s /tmp/celerybeat-schedule
     depends_on:
       - redis
@@ -130,6 +138,9 @@ services:
     image: postgres:14.0
     restart: *default-restart
     logging: *default-logging
+    hostname: db
+    networks:
+      - default
     environment:
       # Appending any env variable with '_FILE' allows the file content to
       # be used to create the database
@@ -146,17 +157,27 @@ services:
   web:
     image: quay.io/octopize/web:${AVATAR_WEB_VERSION}
     restart: *default-restart
+    logging: *default-logging
+    hostname: web
+    networks:
+      - default
     profiles: ["with-web"]
 
   redis:
     image: redis:6.2.6-alpine
     restart: *default-restart
     logging: *default-logging
+    hostname: redis
+    networks:
+      - default
 
   caddy:
     image: caddy:2.4.6-alpine
     logging: *default-logging
     restart: *default-restart
+    hostname: caddy
+    networks:
+      - default
     ports:
       - "443:443"
     environment:
@@ -170,13 +191,19 @@ services:
 
   pdfgenerator:
     image: quay.io/octopize/pdfgenerator:${AVATAR_PDFGENERATOR_VERSION}
-    logging: *default-logging
     restart: *default-restart
-
+    logging: *default-logging
+    hostname: pdfgenerator
+    networks:
+      - default
 
   notebook-hub:
     image: quay.io/octopize/notebook-hub:${AVATAR_NOTEBOOK_HUB_VERSION}
     restart: *default-restart
+    logging: *default-logging
+    hostname: notebook-hub
+    networks:
+      - default
     container_name: jupyterhub
     volumes:
       # Bind Docker socket on the host so we can connect to the daemon from
@@ -184,6 +211,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock:rw"
       # Bind Docker volume on host for JupyterHub database and cookie secrets
       - "notebook-hub-data:/data"
+      - "~/.docker/config.json:/root/.docker/config.json"
     ports:
       - "8002:8002"
 
@@ -220,6 +248,13 @@ secrets:
   # If using clevercloud
   clevercloud_sso_salt:
     file: ${SECRETS_DIR-.secrets}/clevercloud_sso_salt
+
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
 
 volumes:
   caddy-data:

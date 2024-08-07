@@ -18,6 +18,7 @@ data:
   BASE_API_URL: {{ .Values.api.baseUrl | quote }}
   PDFGENERATOR_URL: http://{{ .Values.pdfgeneratorHost }}:{{ .Values.pdfgeneratorPort }}
   SHARED_STORAGE_PATH: {{ .Values.api.sharedStoragePath | quote }}
+  AWS_ENDPOINT_URL: {{ .Values.api.awsEndpointUrl | quote }}
   USE_EMAIL_AUTHENTICATION: {{ .Values.api.useEmailAuthentication | default "false" | quote }}
   MAX_ALLOWED_DIMENSIONS_PER_DATASET: {{ .Values.api.maxAllowedDimensionsPerDataset | quote }}
   MAX_ALLOWED_LINES_PER_DATASET: {{ .Values.api.maxAllowedLinesPerDataset | quote }}

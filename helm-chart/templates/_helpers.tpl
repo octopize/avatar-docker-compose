@@ -107,6 +107,13 @@ Define the default app env variables
                 configMapKeyRef:
                   name: avatar-config
                   key: SHARED_STORAGE_PATH
+            {{- if .Values.api.awsEndpointUrl }}
+            - name: AWS_ENDPOINT_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: AWS_ENDPOINT_URL
+            {{- end }}
             - name: PDFGENERATOR_URL
               valueFrom:
                 configMapKeyRef:

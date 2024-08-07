@@ -125,7 +125,8 @@ api:
 
   # Path to s3:// or gs://
   sharedStoragePath: ""
-  
+  awsEndpointUrl: ""
+
   awsStorageAccountAccessKeyId: ""
   awsStorageAccountSecretAccessKey: ""
 

@@ -6,7 +6,11 @@ This documents lays out how to deploy the stack on a single instance. For env-sp
 
 ## Preqrequisites
 
-- A server with Docker installed. We recommend using Ubuntu 20.04 LTS or later.
+- A Linux server. We recommend using Ubuntu 22.04 LTS or later.
+- The following dependencies installed:
+  - `curl`
+  - `docker`
+  - `make`
 - A domain name pointing to the server. This is necessary for HTTPS.
 - A certificate for the domain name. This is necessary for HTTPS.
 - User deploying should belong to the `docker` group. See [Post-installation steps for Linux](https://docs.docker.com/engine/install/linux-postinstall/).

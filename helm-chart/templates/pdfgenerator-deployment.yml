@@ -31,7 +31,7 @@ spec:
               - key: nodeType
                 operator: In
                 values:
-                - {{ .Values.resources.pdfgeneratorPreferredNodeType | quote}}   
+                - {{ .Values.resources.pdfgeneratorPreferredNodeType | quote}}
       {{ end }}
       containers:
         - name: pdfgenerator

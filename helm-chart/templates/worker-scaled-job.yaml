@@ -119,6 +119,9 @@ spec:
               value: "True"
             - name: REMAP_SIGTERM
               value: "SIGQUIT"
+              # https://docs.celeryq.dev/en/stable/userguide/debugging.html#enabling-the-break-point-signal
+            - name: CELERY_RDBSIG
+              value: "1"
           {{ if $.Values.debug.storage.useLocal }}
             - name: USER_ID
               value: "1000"

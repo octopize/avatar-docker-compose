@@ -1,0 +1,3 @@
+Once deployed, you can consume the API using one of the clients.
+
+See https://docs.octopize.io/docs/clients/

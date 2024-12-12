@@ -1,0 +1,11 @@
+apiVersion: v2
+name: avatar
+description: A Helm chart for the Avatar platform
+type: application
+
+# This is the chart version. This version number should be incremented each time you make changes
+# to the chart and its templates, including the app version.
+# Versions are expected to follow Semantic Versioning (https://semver.org/)
+version: 0.0.1
+
+icon: https://octopize-md.com/wp-content/uploads/2021/07/cropped-picto-octopize-32x32.png

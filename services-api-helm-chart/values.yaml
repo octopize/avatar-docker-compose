@@ -1,0 +1,101 @@
+# Your env's name
+envName: test.helm
+
+image:
+  pullPolicy: IfNotPresent
+
+# The image tag version. It's a good idea to pin it to something specific.
+# Avoid using "latest".
+avatarServiceApiVersion: 0.0.1
+pdfgeneratorVersion: 0.1.4
+
+# Octopize will provide you with this, it should be base64 encoded.
+dockerPullSecret: ""
+
+# Db connection
+dbHost: 127.0.0.1
+dbPort: "5432"
+dbName: "avatar"
+dbUsername: "avatar"
+# For instance: python -c "import secrets; print(secrets.token_hex(), end='')"
+dbPassword: ""
+
+resources:
+  apiReplicas: 1
+  pdfgeneratorReplicas: 1
+  apiMemoryRequest: "4Gi"
+  pdfgeneratorMemoryRequest: "2Gi"
+
+  apiCpuRequest: "1000m"
+  pdfgeneratorCpuRequest: "1000m"
+
+
+# TODO: Nest these in a pdfgenerator: subsection
+pdfgeneratorHost: "avatar-pdf"
+pdfgeneratorPort: 8001
+
+ingress:
+  useGCP: false
+  gcp:
+    staticIpName: ""
+    managedCertificateName: ""
+
+# GCP-specific configuration
+gcp:
+  useGCP: false
+  # For SQL Proxy
+  ksaName: ""
+  gsaEmail: ""
+  dbInstanceConnectionName: ""
+
+debug:
+  storage:
+    # If true, creates a PersistentVolumeClaim and mounts it to the API pods.
+    # Otherwise, we expect the shared storage to be specified in the ConfigMap and point
+    # to a remote storage (s3:// or gs://).
+    useLocal: false
+
+api:
+  # TODO: Nest all of these in a config: subsection,
+  #       as this is the config that is used for the API app,
+  #       not only the API deployment/pod.
+  #       This will require modifying the values in the pulumi program
+  # Externally accessible API url (should be with https)
+  baseUrl: https://avatar.yourcompany.com
+
+  isTelemetryEnabled: true
+  isSentryEnabled: true
+  logLevel: "INFO"
+  deleteFilesUsingCronjob: false
+
+  pepper: TODO   # python -c "import secrets; print(secrets.token_hex(), end='')"
+  authjwtSecretKey: TODO   # python -c "import secrets; print(secrets.token_hex(), end='')"
+  # python -c "import base64; import os; print(str(base64.urlsafe_b64encode(os.urandom(32)), encoding='utf-8'), end='')"
+  fileEncryptionKey: TODO
+
+
+  # If useEmailAuthentication is true, provide only adminEmail. Else, provide
+  # firstUserName and firstUserPassword.
+  useEmailAuthentication: false
+  organizationName: ""
+  adminEmails: 
+    - ""
+  firstUserName: ""
+  firstUserPassword: ""   # python -c "import secrets; print(secrets.token_hex(), end='')"
+
+  # Path to s3:// or gs://
+  sharedStoragePath: ""
+  awsEndpointUrl: ""
+
+  awsStorageAccountAccessKeyId: ""
+  awsStorageAccountSecretAccessKey: ""
+
+  # AWS Mail account used to send mails for password reset
+  awsMailAccountAccessKeyId: ""
+  awsMailAccountSecretAccessKey: ""
+
+  maxAllowedDimensionsPerDataset: "200"
+  maxAllowedLinesPerDataset: "2000000"
+
+  # Clevercloud constant
+  clevercloudSsoSalt: ""

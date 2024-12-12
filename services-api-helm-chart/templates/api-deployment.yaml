@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: avatar-api
+  labels:
+    {{- include "avatar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: api
+  replicas: {{ .Values.resources.apiReplicas }}
+  template:
+    metadata:
+      labels:
+        {{- include "avatar.labels" . | nindent 8 }}
+        # Do not modify the following label without modifying the `podAffinity` of other objects.
+        app.kubernetes.io/component: api
+    spec:
+      containers:
+        {{- include "avatar.db_proxy_container" $ }}
+        - name: avatar-api
+          image: quay.io/octopize/avatar-service-api:{{ .Values.avatarServiceApiVersion }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          volumeMounts:
+            - mountPath: /var/run/secrets
+              name: secrets
+              readOnly: true
+          resources:
+            requests:
+              memory: {{ .Values.resources.apiMemoryRequest }}
+              cpu: {{ .Values.resources.apiCpuRequest }}
+            limits:
+              memory: {{ .Values.resources.apiMemoryRequest }}
+              cpu: {{ .Values.resources.apiCpuRequest }}
+          env:
+            {{- include "avatar.app_env" . }}
+            - name: USE_EMAIL_AUTHENTICATION
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: USE_EMAIL_AUTHENTICATION
+            {{ if .Values.debug.storage.useLocal }}
+            - name: USER_ID
+              value: "1000"
+            - name: GROUP_ID
+              value: "1000"
+            - name: USE_CONSOLE_LOGGING
+              value: "True"
+            {{ end }}
+          ports:
+            - name: api
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: "/health"
+              port: 8000
+              httpHeaders:
+              - name: Host
+                value: "127.0.0.1"
+            failureThreshold: 3
+            periodSeconds: 30
+            timeoutSeconds: 2
+          livenessProbe:
+            # https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+            httpGet:
+              path: "/health"
+              port: 8000
+              httpHeaders:
+              - name: Host
+                value: "127.0.0.1"
+            failureThreshold: 3
+            periodSeconds: 30
+            timeoutSeconds: 2
+      imagePullSecrets:
+        - name: docker-local-pull-secret
+      volumes:
+        - name: secrets
+          secret:
+            secretName: api

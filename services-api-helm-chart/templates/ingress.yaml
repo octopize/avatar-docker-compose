@@ -1,0 +1,59 @@
+{{- if eq .Values.ingress.use_default true  }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-ingress
+  annotations:
+    kubernetes.io/ingress.allow-http: "false"
+    networking.gke.io/v1beta1.FrontendConfig: "api-frontend-config"
+  labels:
+    {{- include "avatar.labels" . | nindent 4 }}
+spec:
+  defaultBackend:
+    service:
+      name: avatar-api
+      port:
+        number: 8000
+
+{{- else if eq .Values.ingress.useGCP true }}
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: managed-cert
+  labels:
+    {{- include "avatar.labels" . | nindent 4 }}
+spec:
+  domains:
+    - {{ get (.Values.api.baseUrl | urlParse) "host" }}
+
+---
+
+# https://cloud.google.com/kubernetes-engine/docs/how-to/ingress-features
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: api-frontend-config
+spec:
+  redirectToHttps:
+    enabled: true
+
+---
+
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-ingress
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: {{ .Values.ingress.gcp.staticIpName | quote }}
+    networking.gke.io/managed-certificates: {{ .Values.ingress.gcp.managedCertificateName | quote }}
+    kubernetes.io/ingress.class: "gce"
+  labels:
+    {{- include "avatar.labels" . | nindent 4 }}
+spec:
+  defaultBackend:
+    service:
+      name: avatar-api
+      port:
+        number: 8000
+{{- end }}

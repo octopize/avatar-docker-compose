@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: avatar-api
+  labels:
+    {{- include "avatar.labels" . | nindent 4 }}
+  annotations:
+    cloud.google.com/backend-config: '{"ports": {"8000":"api-backend-config"}}'
+    cloud.google.com/neg: '{"ingress": true}'
+
+spec:
+  # type: NodePort
+  # ClusterIP for NEG on GCP
+  type: ClusterIP
+  selector:
+    # Match theses labels
+    app.kubernetes.io/component: api
+  ports:
+    - name: api
+      protocol: TCP
+      port: 8000
+      targetPort: api
+
+
+{{ if .Values.gcp.useGCP }}
+---
+
+# https://cloud.google.com/kubernetes-engine/docs/how-to/ingress-features#configuring_ingress_features_through_backendconfig_parameters
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: api-backend-config
+spec:
+  timeoutSec: 300 # 5 minutes
+  logging:
+    enable: true
+    sampleRate: 1
+
+{{ end }}

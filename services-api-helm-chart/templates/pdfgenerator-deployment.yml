@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: avatar-pdf
+  labels:
+    {{- include "avatar.labels" . | nindent 4 }}
+    app.kubernetes.io/component: pdfgenerator
+
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: pdfgenerator
+  replicas: {{ .Values.resources.pdfgeneratorReplicas }}
+  template:
+    metadata:
+      labels:
+        {{- include "avatar.labels" . | nindent 8 }}
+        app.kubernetes.io/component: pdfgenerator
+    spec:
+
+      containers:
+        - name: pdfgenerator
+          image: quay.io/octopize/pdfgenerator:{{ .Values.pdfgeneratorVersion }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            requests:
+              memory: {{ .Values.resources.pdfgeneratorMemoryRequest }}
+              cpu: {{ .Values.resources.pdfgeneratorCpuRequest }}
+            limits:
+              memory: {{ .Values.resources.pdfgeneratorMemoryRequest }}
+              cpu: {{ .Values.resources.pdfgeneratorCpuRequest }}
+          ports:
+            - name: pdfgenerator
+              containerPort: 8000
+          readinessProbe:
+            httpGet:
+              path: "/health"
+              port: 8000
+              httpHeaders:
+              - name: Host
+                value: "127.0.0.1"
+            failureThreshold: 3
+            periodSeconds: 30
+            timeoutSeconds: 2
+          livenessProbe:
+            # https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
+            httpGet:
+              path: "/health"
+              port: 8000
+              httpHeaders:
+              - name: Host
+                value: "127.0.0.1"
+            failureThreshold: 3
+            periodSeconds: 30
+            timeoutSeconds: 2
+
+      imagePullSecrets:
+        - name: docker-local-pull-secret

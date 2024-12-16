@@ -20,7 +20,7 @@ GIT_ROOT = Path(
     subprocess.check_output(["git", "rev-parse", "--show-toplevel"], text=True).strip()
 )
 
-HELM_CHART_PATH = GIT_ROOT / "helm-chart"
+HELM_CHART_PATH = GIT_ROOT / "services-api-helm-chart"
 SAVE_DIRECTORY = GIT_ROOT / "bin" / "minikube" / "build"
 
 
@@ -45,10 +45,8 @@ DEFAULT_LOG_LEVEL = "INFO"
 DEFAULT_DB_NAME = "avatar"
 
 DEFAULT_USERNAME = "avatar_admin"
-DEFAULT_WORKER_MEMORY_REQUEST = "2Gi"
 DEFAULT_API_MEMORY_REQUEST = "1Gi"
 DEFAULT_PDFGENERATOR_MEMORY_REQUEST = "2Gi"
-DEFAULT_WORKER_CPU_REQUEST = "1000m"
 DEFAULT_API_CPU_REQUEST = "512m"
 DEFAULT_PDFGENERATOR_CPU_REQUEST = "512m"
 
@@ -102,10 +100,9 @@ class AvatarHelmConfig(HelmConfig):
     db_user: str
     db_name: str
     postgres_host: str
-    redis_host: str
     shared_storage_path: str
 
-    api_base_url: str
+    avatar_api_url: str
     avatar_version: str
 
     organization_name: str
@@ -117,14 +114,10 @@ class AvatarHelmConfig(HelmConfig):
 
     pdfgenerator_version: str
 
-    worker_memory_request: str
     api_memory_request: str
     pdfgenerator_memory_request: str
-    worker_cpu_request: str
     api_cpu_request: str
     pdfgenerator_cpu_request: str
-
-    with_keda: bool
 
 
 class Result(BaseModel):
@@ -134,7 +127,7 @@ class Result(BaseModel):
 
 class AvatarResult(Result):
     avatar_version: str
-    api_base_url: str
+    avatar_api_url: str
 
     organization_name: str
     authentication: EmailAuthentication | UsernameAuthentication
@@ -144,36 +137,30 @@ class AvatarResult(Result):
 
     pdfgenerator_version: str
 
-    worker_memory_request: str
     api_memory_request: str
     pdfgenerator_memory_request: str
-    worker_cpu_request: str
     api_cpu_request: str
     pdfgenerator_cpu_request: str
 
 
 KEY_MAPPING = {
-    "api.baseUrl": "api_base_url",
+    "api.baseUrl": "avatar_api_url",
     "dockerPullSecret": "docker_pull_secret",
     "avatarVersion": "avatar_version",
     "dbPassword": "db_password",
     "dbName": "db_name",
     "dbUser": "db_user",
     "dbHost": "postgres_host",
-    "redisHost": "redis_host",
     "api.pepper": "pepper",
     "api.authjwtSecretKey": "authjwt_secret_key",
-    "api.fileEncryptionKey": "file_encryption_key",
     "pdfgeneratorVersion": "pdfgenerator_version",
     "api.isTelemetryEnabled": "is_telemetry_enabled",
     "api.isSentryEnabled": "is_sentry_enabled",
     "api.logLevel": "log_level",
     "api.organizationName": "organization_name",
     "api.sharedStoragePath": "shared_storage_path",
-    "resources.workerMemoryRequest": "worker_memory_request",
     "resources.apiMemoryRequest": "api_memory_request",
     "resources.pdfgeneratorMemoryRequest": "pdfgenerator_memory_request",
-    "resources.workerCpuRequest": "worker_cpu_request",
     "resources.apiCpuRequest": "api_cpu_request",
     "resources.pdfgeneratorCpuRequest": "pdfgenerator_cpu_request",
 }
@@ -196,10 +183,6 @@ class PostgresResult(Result):
     db_password: str
     db_name: str
     db_user: str
-
-
-class RedisResult(Result):
-    redis_host: str
 
 
 def is_minikube_running():
@@ -227,8 +210,6 @@ def load_result(key: str) -> Result:
 
     if key.startswith("postgres"):
         return PostgresResult.parse_obj(json_)
-    if key.startswith("redis"):
-        return RedisResult.parse_obj(json_)
     if key.startswith("avatar"):
         return AvatarResult.parse_obj(json_)
     raise ValueError("Prefix does not exist.")
@@ -243,9 +224,7 @@ def save_result(result: Result) -> None:
 
 class Chart(Enum):
     POSTGRES = "postgres"
-    REDIS = "redis"
     AVATAR = "avatar"
-    KEDA = "keda"
 
 
 def get_release_name(chart: Chart, release_name_prefix: str) -> str:
@@ -253,8 +232,7 @@ def get_release_name(chart: Chart, release_name_prefix: str) -> str:
 
 
 class RetryCallable(Protocol):
-    def __call__(self, *, nb_attempts_left: int, is_debug: bool) -> None:
-        ...
+    def __call__(self, *, nb_attempts_left: int, is_debug: bool) -> None: ...
 
 
 def do_retry(
@@ -403,7 +381,7 @@ def create_cluster(
     organization_name: str = typer.Option(
         DEFAULT_ORGANIZATION_NAME, help="Name of the organization/tenant"
     ),
-    api_base_url: str = typer.Option(
+    avatar_api_url: str = typer.Option(
         DEFAULT_API_BASE_URL, help="URL at which the API is accessible."
     ),
     aws_mail_account_access_key_id: Optional[str] = typer.Option(
@@ -458,10 +436,6 @@ def create_cluster(
         DEFAULT_LOG_LEVEL,
         help="Log level of the API. Can be one of DEBUG, INFO, WARNING, ERROR, CRITICAL.",
     ),
-    worker_memory_request: str = typer.Option(
-        DEFAULT_WORKER_MEMORY_REQUEST,
-        help="Amount of memory to allocate to a avatar-worker pod.",
-    ),
     api_memory_request: str = typer.Option(
         DEFAULT_API_MEMORY_REQUEST,
         help="Amount of memory to allocate to a avatar-api pod.",
@@ -470,10 +444,6 @@ def create_cluster(
         DEFAULT_PDFGENERATOR_MEMORY_REQUEST,
         help="Amount of memory to allocate to a avatar-pdfgenerator pod.",
     ),
-    worker_cpu_request: str = typer.Option(
-        DEFAULT_WORKER_CPU_REQUEST,
-        help="Amount of CPU to allocate to a avatar-worker pod.",
-    ),
     api_cpu_request: str = typer.Option(
         DEFAULT_API_CPU_REQUEST, help="Amount of CPU to allocate to a avatar-api pod."
     ),
@@ -481,7 +451,6 @@ def create_cluster(
         DEFAULT_PDFGENERATOR_CPU_REQUEST,
         help="Amount of CPU to allocate to a avatar-pdfgenerator pod.",
     ),
-    with_keda: bool = typer.Option(True, help="Use KEDA autoscaling.", is_flag=True),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ) -> None:
     """Create a complete cluster able to run the Avatar API.
@@ -520,16 +489,13 @@ def create_cluster(
         db_user=db_user,
         db_password=db_password,
     )
-    redis_result = create_redis(
-        release_name_prefix=release_name_prefix, namespace=namespace, is_debug=is_debug
-    )
 
     create_avatar(
         release_name_prefix=release_name_prefix,
         namespace=namespace,
         docker_pull_secret=docker_pull_secret,
         avatar_version=avatar_version,
-        api_base_url=api_base_url,
+        avatar_api_url=avatar_api_url,
         shared_storage_path=shared_storage_path,
         pdfgenerator_version=pdfgenerator_version,
         aws_mail_account_access_key_id=aws_mail_account_access_key_id,
@@ -542,19 +508,15 @@ def create_cluster(
         is_telemetry_enabled=is_telemetry_enabled,
         is_sentry_enabled=is_sentry_enabled,
         log_level=log_level,
-        worker_memory_request=worker_memory_request,
         api_memory_request=api_memory_request,
         pdfgenerator_memory_request=pdfgenerator_memory_request,
-        worker_cpu_request=worker_cpu_request,
         api_cpu_request=api_cpu_request,
         pdfgenerator_cpu_request=pdfgenerator_cpu_request,
         db_host=postgres_result.db_host,
         db_user=postgres_result.db_user,
         db_name=postgres_result.db_name,
         db_password=postgres_result.db_password,
-        redis_host=redis_result.redis_host,
         is_debug=is_debug,
-        with_keda=with_keda,
         should_upgrade_only=False,
     )
 
@@ -706,107 +668,6 @@ def create_postgres(
 
 
 @app.command()
-def create_redis(
-    release_name_prefix: str = typer.Option(..., envvar="RELEASE_NAME"),
-    namespace: str = typer.Option(..., envvar="NAMESPACE"),
-    is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
-) -> RedisResult:
-    """Create a redis message queue setup to run the Avatar API"""
-
-    if not is_minikube_running():
-        typer.echo("Minikube must be running. Run with 'minikube start'.")
-        raise typer.Abort()
-
-    redis_release = get_release_name(Chart.REDIS, release_name_prefix)
-    existing_redis_release = subprocess.check_output(
-        ["helm", "list", "--namespace", namespace, "--filter", redis_release, "-q"],
-        text=True,
-    ).strip()
-
-    if existing_redis_release == redis_release:
-        typer.echo("A redis release already exists in that namespace.")
-        raise typer.Abort()
-
-    flags = ["--debug", "--create-namespace"]
-    namespace_command = ["--namespace", namespace]
-    values = ["--set", "auth.enabled=false"]
-    install_redis = [
-        "helm",
-        "install",
-        redis_release,
-        "bitnami/redis",
-        *values,
-        *namespace_command,
-        *flags,
-    ]
-
-    typer.echo("Creating redis Helm release...")
-    if is_debug:
-        typer.echo(" ".join(install_redis))
-
-    result = subprocess.run(
-        install_redis,
-        stdout=subprocess.DEVNULL if not is_debug else None,
-        stderr=subprocess.PIPE,
-    )
-
-    if result.returncode != 0:
-        typer.echo(result.stderr)
-        typer.echo("Could not initialize Redis :(")
-        raise typer.Exit(result.returncode)
-
-    # Waiting for redis to be setup
-    def verify_status(
-        *, is_debug: bool = False, nb_attempts_left: Optional[int] = None
-    ) -> None:
-        get_pod_json = [
-            "kubectl",
-            "get",
-            "pod",
-            f"{redis_release}-master-0",
-            "--namespace",
-            namespace,
-            "-o",
-            "json",
-        ]
-
-        get_container_status = [
-            "jq",
-            ".status.containerStatuses[0].ready",
-        ]
-
-        get_json_process = subprocess.Popen(get_pod_json, stdout=subprocess.PIPE)
-        return_value = subprocess.check_output(
-            get_container_status, stdin=get_json_process.stdout, text=True
-        )
-        get_json_process.wait()
-
-        if return_value.strip() == "true":
-            raise StopIteration
-
-    do_retry(
-        verify_status,
-        on_failure_message="Could not initialize database.",
-        sleep_for_seconds=15,
-        is_debug=is_debug,
-    )
-
-    typer.echo(f"Redis setup! release_name={redis_release}")
-
-    redis_host = f"{redis_release}-master.{namespace}.svc.cluster.local"
-    result =  RedisResult(
-        redis_host=redis_host,
-        release_name=redis_release,
-        namespace=namespace,
-    )
-
-    save_result(result)
-
-    return result
-
-
-
-@app.command()
 def create_avatar(
     release_name_prefix: str = typer.Option(
         ..., envvar="RELEASE_NAME", help="Prefix used for all the helm releases."
@@ -827,7 +688,7 @@ def create_avatar(
     pdfgenerator_version: str = typer.Option(
         DEFAULT_PDFGENERATOR_VERSION, help="Version of the pdfgenerator."
     ),
-    api_base_url: str = typer.Option(
+    avatar_api_url: str = typer.Option(
         DEFAULT_API_BASE_URL, help="URL at which the API is accessible."
     ),
     shared_storage_path: str = typer.Option(
@@ -863,9 +724,6 @@ def create_avatar(
         None,
         help="Password for the username. Required is --use-email-authentication is NOT set.",
     ),
-    redis_host: str = typer.Option(
-        ..., help="Name of the host where a Redis instance is running."
-    ),
     db_host: str = typer.Option(
         ..., help="Name of the host where a Database instance is running."
     ),
@@ -886,10 +744,6 @@ def create_avatar(
         DEFAULT_LOG_LEVEL,
         help="Log level of the API. Can be one of DEBUG, INFO, WARNING, ERROR, CRITICAL.",
     ),
-    worker_memory_request: str = typer.Option(
-        DEFAULT_WORKER_MEMORY_REQUEST,
-        help="Amount of memory to allocate to a avatar-worker pod.",
-    ),
     api_memory_request: str = typer.Option(
         DEFAULT_API_MEMORY_REQUEST,
         help="Amount of memory to allocate to a avatar-api pod.",
@@ -897,10 +751,6 @@ def create_avatar(
     pdfgenerator_memory_request: str = typer.Option(
         DEFAULT_PDFGENERATOR_MEMORY_REQUEST,
         help="Amount of memory to allocate to a avatar-pdfgenerator pod.",
-    ),
-    worker_cpu_request: str = typer.Option(
-        DEFAULT_WORKER_CPU_REQUEST,
-        help="Amount of CPU to allocate to a avatar-worker pod.",
     ),
     api_cpu_request: str = typer.Option(
         DEFAULT_API_CPU_REQUEST, help="Amount of CPU to allocate to a avatar-api pod."
@@ -917,7 +767,6 @@ def create_avatar(
         """and you don't want to create a brand new release.""",
     ),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
-    with_keda: bool = typer.Option(True, "--with-keda", help="Use KEDA autoscaling."),
 ) -> AvatarResult:
     """ADVANCED. Use create-cluster if you're new to this.
     Create the avatar component hosting the Avatar API.
@@ -937,13 +786,10 @@ def create_avatar(
         password=password,
     )
 
-    if not should_upgrade_only and (not db_host or not redis_host):
+    if not should_upgrade_only and not db_host:
+        typer.echo("Expected 'postgres_host' to have a value, but they have not.")
         typer.echo(
-            "Expected 'postgres_host' and 'redis_host' to have a value, but they have not."
-        )
-        typer.echo(
-            """Consider running 'python minikube.by create-postgres' and """
-            """'python minikube create-redis' beforehand"""
+            """Consider running 'python minikube.by create-postgres' beforehand"""
         )
         raise typer.Abort()
 
@@ -952,7 +798,7 @@ def create_avatar(
     config = AvatarHelmConfig(
         release_name=avatar_release_name,
         namespace=namespace,
-        api_base_url=api_base_url,
+        avatar_api_url=avatar_api_url,
         avatar_version=avatar_version,
         docker_pull_secret=docker_pull_secret,
         pdfgenerator_version=pdfgenerator_version,
@@ -961,17 +807,13 @@ def create_avatar(
         db_user=db_user,
         db_name=db_name,
         postgres_host=db_host,
-        redis_host=redis_host,
-        with_keda=with_keda,
         organization_name=organization_name,
         authentication=authentication,
         is_telemetry_enabled=is_telemetry_enabled,
         is_sentry_enabled=is_sentry_enabled,
         log_level=log_level,
-        worker_memory_request=worker_memory_request,
         api_memory_request=api_memory_request,
         pdfgenerator_memory_request=pdfgenerator_memory_request,
-        worker_cpu_request=worker_cpu_request,
         api_cpu_request=api_cpu_request,
         pdfgenerator_cpu_request=pdfgenerator_cpu_request,
     )
@@ -990,26 +832,6 @@ def create_avatar(
     upgrade_or_install = "install" if not should_upgrade_only else "upgrade"
     flags = ["--create-namespace", "--debug"]
     namespace_command = ["--namespace", config.namespace]
-
-    using_keda_autoscaling = []
-    if config.with_keda:
-        using_keda_autoscaling = ["--set", "worker.useKedaAutoscaler=true"]
-        using_keda_autoscaling.extend(
-            [
-                "--set",
-                f"worker.scaling.scaledComponents[0].memoryRequest={worker_memory_request}",
-                "--set",
-                f"worker.scaling.scaledComponents[0].queue=medium",  # prevent overriding of values.yaml # noqa: E501
-                "--set",
-                f"worker.scaling.scaledComponents[1].memoryRequest={worker_memory_request}",
-                "--set",
-                f"worker.scaling.scaledComponents[1].queue=huge",  # prevent overriding  of values.yaml # noqa: E501
-                "--set",
-                # minikube has only one type of node, so we need to disable this
-                f"worker.preventPodsFromBeingScheduledOnSameNodeAsAPI=false",
-            ]
-        )
-
 
     using_local_storage = ["--set", "debug.storage.useLocal=true"]
 
@@ -1042,30 +864,6 @@ def create_avatar(
         )
     )
 
-    if config.with_keda:
-        keda_release_name = get_release_name(Chart.KEDA, release_name_prefix)
-        install_keda = [
-            "helm",
-            upgrade_or_install,
-            keda_release_name,
-            "kedacore/keda",
-            "--namespace",
-            namespace,
-        ]
-
-        typer.echo(f"Creating keda Helm release with release_name={keda_release_name}")
-
-        result = subprocess.run(
-            install_keda,
-            stdout=subprocess.DEVNULL if not is_debug else None,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-
-        if result.returncode != 0:
-            typer.echo(result.stderr)
-            raise typer.Exit(1)
-
     time.sleep(10)  # TODO: optimize this
 
     install_avatar = [
@@ -1077,7 +875,6 @@ def create_avatar(
         *flags,
         *values,
         *using_local_storage,
-        *using_keda_autoscaling,
         *authentication_values,
     ]
 
@@ -1159,7 +956,7 @@ def create_avatar(
     typer.echo("Useful commands")
 
     typer.echo(
-        f"""\t-AVATAR_BASE_URL='{config.api_base_url}'"""
+        f"""\t-AVATAR_BASE_URL='{config.avatar_api_url}'"""
         f"""AVATAR_USERNAME='{email_or_username}'"""
         f"""AVATAR_PASSWORD='{auth_password}'"""
         """make -C ../../../avatar/platform/api run-test-integration"""
@@ -1167,6 +964,33 @@ def create_avatar(
     typer.echo(
         f"\t- poetry run python launch.py delete-cluster --release-name-prefix {release_name_prefix} --namespace {namespace}"  # noqa: E501
     )
+
+
+
+    upgrade_command = [
+        "poetry",
+        "run",
+        "python",
+        "launch.py",
+        "create-avatar",
+        "--upgrade-only",
+        "--db-host",
+        config.postgres_host,
+        "--db-password",
+        config.db_password,
+        "--release-name-prefix",
+        release_name_prefix,
+        "--namespace",
+        namespace,
+        "--docker-pull-secret",
+        docker_pull_secret,
+        "--username",
+        email_or_username,
+        "--password",
+        auth_password,
+    ]
+
+    typer.echo("".join(upgrade_command))
 
     return avatar_result
 

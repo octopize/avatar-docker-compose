@@ -27,12 +27,17 @@ install-helm: minikube  ## Install Helm template
 	helm install avatar-release ./helm-chart --debug --namespace avatar-release --create-namespace --values helm-chart/values.yaml
 .PHONY: install-helm
 
+install-service-api-helm: minikube  ## Install Helm template
+	helm install avatar-service-release ./services-api-helm-chart --debug --namespace avatar-release --create-namespace --values ./services-api-helm-chart/values.yaml
+.PHONY: install-service-api-helm
+
+
 uninstall-helm:  ## Uninstall Helm template
 	helm uninstall avatar-release --namespace avatar-release
 .PHONY: uninstall-helm
 
 minikube: ## Start minikube. Noop if already started.
-	minikube status 1> /dev/null || minikube start
+	minikube status 2> /dev/null || minikube start
 .PHONY: minikube
 
 delete-namespace:

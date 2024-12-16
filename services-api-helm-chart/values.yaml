@@ -20,6 +20,9 @@ dbUsername: "avatar"
 # For instance: python -c "import secrets; print(secrets.token_hex(), end='')"
 dbPassword: ""
 
+dbAdminUsername: ""
+dbAdminPassword: ""
+
 resources:
   apiReplicas: 1
   pdfgeneratorReplicas: 1

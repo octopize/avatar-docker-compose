@@ -1,6 +1,4 @@
-import base64
 import json
-import os
 import secrets
 import subprocess
 import time
@@ -29,7 +27,7 @@ class AuthKind(Enum):
     USERNAME = "username"
 
 
-DEFAULT_AVATAR_VERSION = "latest"
+DEFAULT_AVATAR_VERSION = "0.0.2"
 DEFAULT_API_BASE_URL = "http://localhost:8000"
 
 DEFAULT_IS_SENTRY_ENABLED = False
@@ -43,6 +41,7 @@ DEFAULT_SHOULD_USE_LOCAL_STORAGE = True
 DEFAULT_LOG_LEVEL = "INFO"
 
 DEFAULT_DB_NAME = "avatar"
+DEFAULT_DB_ADMIN_USER = "avatar_dba"
 
 DEFAULT_USERNAME = "avatar_admin"
 DEFAULT_API_MEMORY_REQUEST = "1Gi"
@@ -85,8 +84,8 @@ class HelmConfig(BaseModel):
 
 class PostgresHelmConfig(HelmConfig):
     db_name: str
-    db_user: str
-    db_password: str
+    db_admin_user: str
+    db_admin_password: str
 
 
 class AvatarHelmConfig(HelmConfig):
@@ -94,11 +93,13 @@ class AvatarHelmConfig(HelmConfig):
     pepper: str = secrets.token_hex()
 
     authjwt_secret_key: str = secrets.token_hex()
-    file_encryption_key: str = base64.urlsafe_b64encode(os.urandom(32)).decode("utf-8")
 
-    db_password: str
-    db_user: str
     db_name: str
+    db_user: str
+    db_password: str
+    db_admin_user: str
+    db_admin_password: str
+
     postgres_host: str
     shared_storage_path: str
 
@@ -146,10 +147,12 @@ class AvatarResult(Result):
 KEY_MAPPING = {
     "api.baseUrl": "avatar_api_url",
     "dockerPullSecret": "docker_pull_secret",
-    "avatarVersion": "avatar_version",
-    "dbPassword": "db_password",
+    "avatarServiceApiVersion": "avatar_version",
     "dbName": "db_name",
-    "dbUser": "db_user",
+    "dbUsername": "db_user",
+    "dbPassword": "db_password",
+    "dbAdminUsername": "db_admin_user",
+    "dbAdminPassword": "db_admin_password",
     "dbHost": "postgres_host",
     "api.pepper": "pepper",
     "api.authjwtSecretKey": "authjwt_secret_key",
@@ -180,9 +183,9 @@ EMAIL_AUTHENTICATION_KEY_MAPPING = {
 
 class PostgresResult(Result):
     db_host: str
-    db_password: str
+    db_admin_password: str
     db_name: str
-    db_user: str
+    db_admin_user: str
 
 
 def is_minikube_running():
@@ -417,6 +420,8 @@ def create_cluster(
     db_name: str = typer.Option(DEFAULT_DB_NAME),
     db_user: str = typer.Option(DEFAULT_DB_NAME),
     db_password: str = typer.Option(None),
+    db_admin_user: str = typer.Option(DEFAULT_DB_ADMIN_USER),
+    db_admin_password: str = typer.Option(None),
     shared_storage_path: str = typer.Option(
         DEFAULT_SHARED_STORAGE_PATH,
         help="""Path to storage that is shared between the API and worker pods."""
@@ -481,13 +486,13 @@ def create_cluster(
         password=password,
     )
 
-    postgres_result = create_postgres(
+    postgres_result: PostgresResult = create_postgres(
         release_name_prefix=release_name_prefix,
         namespace=namespace,
         is_debug=is_debug,
         db_name=db_name,
-        db_user=db_user,
-        db_password=db_password,
+        db_admin_user=db_admin_user,
+        db_admin_password=db_admin_password or secrets.token_hex(),
     )
 
     create_avatar(
@@ -513,9 +518,11 @@ def create_cluster(
         api_cpu_request=api_cpu_request,
         pdfgenerator_cpu_request=pdfgenerator_cpu_request,
         db_host=postgres_result.db_host,
-        db_user=postgres_result.db_user,
-        db_name=postgres_result.db_name,
-        db_password=postgres_result.db_password,
+        db_user=db_user,
+        db_name=db_name,
+        db_password=db_password or secrets.token_hex(),
+        db_admin_user=db_admin_user,
+        db_admin_password=postgres_result.db_admin_password,
         is_debug=is_debug,
         should_upgrade_only=False,
     )
@@ -539,8 +546,8 @@ def create_postgres(
         help="Name of the Kubernetes namespace to deploy the release in.",
     ),
     db_name: str = typer.Option(DEFAULT_DB_NAME),
-    db_user: str = typer.Option(DEFAULT_DB_NAME),
-    db_password: str = typer.Option(None),
+    db_admin_user: str = typer.Option(DEFAULT_DB_NAME),
+    db_admin_password: str = typer.Option(None),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ) -> PostgresResult:
     """Create a postgres database setup to run the Avatar API"""
@@ -553,8 +560,8 @@ def create_postgres(
         release_name=release_name_prefix,
         namespace=namespace,
         db_name=db_name,
-        db_user=db_user,
-        db_password=db_password or secrets.token_hex(),
+        db_admin_user=db_admin_user,
+        db_admin_password=db_admin_password,
     )
 
     postgres_release = get_release_name(Chart.POSTGRES, release_name_prefix)
@@ -571,9 +578,9 @@ def create_postgres(
     namespace_command = ["--namespace", namespace]
     values = [
         "--set",
-        f"auth.username={config.db_user}",
+        f"auth.username={config.db_admin_user}",
         "--set",
-        f"auth.password={config.db_password}",
+        f"auth.password={config.db_admin_password}",
     ]
 
     install_postgres = [
@@ -607,14 +614,14 @@ def create_postgres(
         namespace,
         "--image",
         "docker.io/bitnami/postgresql:14.5.0-debian-11-r6",
-        f"--env=PGPASSWORD={config.db_password}",
+        f"--env=PGPASSWORD={config.db_admin_password}",
         "--command",
         "--",
         "psql",
         "--host",
         postgres_host,
         "-U",
-        config.db_user,
+        config.db_admin_user,
         "-d",
         "postgres",
         "-p",
@@ -658,9 +665,9 @@ def create_postgres(
         release_name=postgres_release,
         namespace=namespace,
         db_host=postgres_host,
-        db_password=config.db_password,
+        db_admin_password=config.db_admin_password,
         db_name=config.db_name,
-        db_user=config.db_name,
+        db_admin_user=config.db_name,
     )
 
     save_result(postgres_result)
@@ -727,9 +734,11 @@ def create_avatar(
     db_host: str = typer.Option(
         ..., help="Name of the host where a Database instance is running."
     ),
-    db_password: str = typer.Option(...),
-    db_user: str = typer.Option(DEFAULT_DB_NAME),
     db_name: str = typer.Option(DEFAULT_DB_NAME),
+    db_user: str = typer.Option(DEFAULT_DB_NAME),
+    db_password: str = typer.Option(...),
+    db_admin_user: str = typer.Option(DEFAULT_DB_ADMIN_USER),
+    db_admin_password: str = typer.Option(...),
     is_telemetry_enabled: bool = typer.Option(
         DEFAULT_IS_TELEMETRY_ENABLED,
         "--enable-telemetry",
@@ -806,6 +815,8 @@ def create_avatar(
         db_password=db_password,
         db_user=db_user,
         db_name=db_name,
+        db_admin_user=db_admin_user,
+        db_admin_password=db_admin_password,
         postgres_host=db_host,
         organization_name=organization_name,
         authentication=authentication,

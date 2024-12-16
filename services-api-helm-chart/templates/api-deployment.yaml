@@ -18,8 +18,19 @@ spec:
         # Do not modify the following label without modifying the `podAffinity` of other objects.
         app.kubernetes.io/component: api
     spec:
+      initContainers:
+        - name: init-avatar-api
+          image: quay.io/octopize/avatar-service-api:{{ .Values.avatarServiceApiVersion }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["python", "/app/avatar/bin/dbtool.py", "setup","-R", "--debug"]
+          volumeMounts:
+            - mountPath: /var/run/secrets
+              name: secrets
+              readOnly: true
+          env:
+            {{- include "avatar.app_env" . }}
+
       containers:
-        {{- include "avatar.db_proxy_container" $ }}
         - name: avatar-api
           image: quay.io/octopize/avatar-service-api:{{ .Values.avatarServiceApiVersion }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}

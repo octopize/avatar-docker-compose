@@ -137,28 +137,3 @@ Define the default app env variables
                   key: DELETE_FILES_USING_CRONJOB
 {{- end }}
 
-{{/*
-Define the Google Cloud SQL proxy if necessary
-Documentation: https://cloud.google.com/sql/docs/mysql/connect-kubernetes-engine
-*/}}
-{{- define "avatar.db_proxy_container" }}
-{{- if $.Values.gcp.dbInstanceConnectionName }}
-        - name: cloud-sql-proxy
-          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.8.1-bullseye # make sure to use the latest version
-          lifecycle:
-            preStop:
-              exec:
-                command: ["/bin/sh", "-c", "sleep 3605"] # sleep for `terminationGracePeriodSeconds` + 5
-          command:
-            - "/cloud-sql-proxy"
-            - "--auto-ip"
-            - "--quitquitquit"
-            - "{{ $.Values.gcp.dbInstanceConnectionName }}"
-          securityContext:
-            runAsNonRoot: true
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu:    "100m"
-{{- end }}
-{{- end }}

@@ -982,8 +982,6 @@ def create_avatar(
         f"\t- poetry run python launch.py delete-cluster --release-name-prefix {release_name_prefix} --namespace {namespace}"  # noqa: E501
     )
 
-
-
     upgrade_command = [
         "poetry",
         "run",

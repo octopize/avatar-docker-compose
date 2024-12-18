@@ -673,7 +673,7 @@ def create_postgres(
         db_host=postgres_host,
         db_admin_password=config.db_admin_password,
         db_name=config.db_name,
-        db_admin_user=config.db_name,
+        db_admin_user=config.db_admin_user,
     )
 
     save_result(postgres_result)

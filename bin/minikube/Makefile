@@ -21,7 +21,7 @@ cluster: ## Create a ready-to-go avatar cluster with default values
 	 AWS_ACCESS_KEY_ID=$$(op read "op://Tech Eng/AWS email sending user/Section_0456E376214A4046BF2664B5BA0EE8B8/Access Key ID")\
 	 AWS_SECRET_ACCESS_KEY=$$(op read "op://Tech Eng/AWS email sending user/Section_0456E376214A4046BF2664B5BA0EE8B8/Secret Access key")\
 	 RELEASE_NAME=$(RELEASE_NAME)\
- 	 poetry run python launch.py create-cluster --debug
+ 	 poetry run python launch.py create-cluster
 .PHONY: cluster
 
 upgrade-cluster: ## Upgrade a avatar cluster

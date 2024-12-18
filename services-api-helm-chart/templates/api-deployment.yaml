@@ -22,7 +22,7 @@ spec:
         - name: init-avatar-api
           image: quay.io/octopize/avatar-service-api:{{ .Values.avatarServiceApiVersion }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          args: ["python", "/app/avatar/bin/dbtool.py", "setup","-R", "--debug"]
+          args: ["python", "/app/avatar/bin/dbtool.py", "setup"]
           volumeMounts:
             - mountPath: /var/run/secrets
               name: secrets

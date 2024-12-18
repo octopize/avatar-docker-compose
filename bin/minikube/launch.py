@@ -20,6 +20,7 @@ GIT_ROOT = Path(
 
 HELM_CHART_PATH = GIT_ROOT / "services-api-helm-chart"
 SAVE_DIRECTORY = GIT_ROOT / "bin" / "minikube" / "build"
+POSTGRES_HELM_CHART_VERSION = "16.3.2"
 
 
 class AuthKind(Enum):
@@ -27,7 +28,7 @@ class AuthKind(Enum):
     USERNAME = "username"
 
 
-DEFAULT_AVATAR_VERSION = "0.0.2"
+DEFAULT_AVATAR_VERSION = "0.0.4"
 DEFAULT_API_BASE_URL = "http://localhost:8000"
 
 DEFAULT_IS_SENTRY_ENABLED = False
@@ -574,13 +575,11 @@ def create_postgres(
         typer.echo("A postgres release already exists in that namespace.")
         raise typer.Exit(code=1)
 
-    flags = ["--create-namespace"]
+    flags = ["--create-namespace", "--version", POSTGRES_HELM_CHART_VERSION]
     namespace_command = ["--namespace", namespace]
     values = [
         "--set",
-        f"auth.username={config.db_admin_user}",
-        "--set",
-        f"auth.password={config.db_admin_password}",
+        f"auth.postgresPassword={config.db_admin_password}",
     ]
 
     install_postgres = [
@@ -602,6 +601,13 @@ def create_postgres(
 
     postgres_host = f"{postgres_release}-postgresql.{namespace}.svc.cluster.local"
 
+    # This uses the postgres user, which has the same password as the admin_user
+    # to create a new user with superuser privileges.
+    # This user will then be used by the avatar-api to bootstrap the database.
+    # This is because the bitnami/postgresql Helm chart does not allow to create 
+    # a user with superuser privileges from the values.yaml file.
+    # However, it can be done with a custom init script, but as the stuff below
+    # was already written, we decided to keep it that way.
     create_database = [
         "kubectl",
         "run",
@@ -621,13 +627,13 @@ def create_postgres(
         "--host",
         postgres_host,
         "-U",
-        config.db_admin_user,
+        "postgres",
         "-d",
         "postgres",
         "-p",
         "5432",
         "-c",
-        f"create database {config.db_name}",
+        f"CREATE USER {config.db_admin_user} WITH SUPERUSER PASSWORD '{config.db_admin_password}'",
     ]
 
     typer.echo("Initializing database...")

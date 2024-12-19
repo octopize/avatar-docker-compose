@@ -29,6 +29,11 @@ spec:
               readOnly: true
           env:
             {{- include "avatar.app_env" . }}
+            - name: USE_EMAIL_AUTHENTICATION
+              valueFrom:
+                configMapKeyRef:
+                  name: avatar-config
+                  key: USE_EMAIL_AUTHENTICATION
 
       containers:
         - name: avatar-api

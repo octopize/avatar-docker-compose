@@ -21,6 +21,7 @@ GIT_ROOT = Path(
 HELM_CHART_PATH = GIT_ROOT / "services-api-helm-chart"
 SAVE_DIRECTORY = GIT_ROOT / "bin" / "minikube" / "build"
 POSTGRES_HELM_CHART_VERSION = "16.3.2"
+SEAWEEDFS_HELM_CHART_VERSION = "4.2.0"
 
 
 class AuthKind(Enum):
@@ -145,6 +146,11 @@ class AvatarResult(Result):
     pdfgenerator_cpu_request: str
 
 
+class SeaweedfsResult(Result):
+    mariadb_password: str
+    mariadb_root_password: str
+
+
 KEY_MAPPING = {
     "api.baseUrl": "avatar_api_url",
     "dockerPullSecret": "docker_pull_secret",
@@ -229,6 +235,7 @@ def save_result(result: Result) -> None:
 class Chart(Enum):
     POSTGRES = "postgres"
     AVATAR = "avatar"
+    SEAWEEDFS = "seaweedfs"
 
 
 def get_release_name(chart: Chart, release_name_prefix: str) -> str:
@@ -236,7 +243,8 @@ def get_release_name(chart: Chart, release_name_prefix: str) -> str:
 
 
 class RetryCallable(Protocol):
-    def __call__(self, *, nb_attempts_left: int, is_debug: bool) -> None: ...
+    def __call__(self, *, nb_attempts_left: int, is_debug: bool) -> None:
+        ...
 
 
 def do_retry(
@@ -327,11 +335,20 @@ def delete_cluster(
         # For some reason, doing a patch call before a delete call does not manage to modify remove
         # the finalizers before the deletion is started,
         # so it still waits indefinitely if we don't specify --wait=false.
+        delete_pvc += ["--wait=false"]
+
+        if is_debug:
+            typer.echo(f"Deleting {pvc=}")
+            typer.echo(" ".join(remove_deletion_protection))
 
         subprocess.run(
-            delete_pvc + ["--wait=false"],
+            delete_pvc,
             stdout=subprocess.DEVNULL if not is_debug else None,
         )
+
+        if is_debug:
+            typer.echo(f"Removing deletion protection from {pvc=}")
+            typer.echo(" ".join(remove_deletion_protection))
 
         subprocess.run(
             remove_deletion_protection,
@@ -345,6 +362,10 @@ def delete_cluster(
 
     for release in releases:
         uninstall_command = ["helm", "uninstall", release, "--namespace", namespace]
+        if is_debug:
+            typer.echo(f"Deleting Helm release {release}...")
+            typer.echo(" ".join(uninstall_command))
+
         result = subprocess.run(
             uninstall_command,
             stdout=subprocess.DEVNULL if not is_debug else None,
@@ -460,11 +481,9 @@ def create_cluster(
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ) -> None:
     """Create a complete cluster able to run the Avatar API.
-    
-    
-    
+
     Usage with defaults:
-    
+
     DOCKER_PULL_SECRET=$(op read "op://Tech Eng/DOCKER_PULL_SECRET/password")\
     AWS_ACCESS_KEY_ID=$(op read "op://Tech Eng/AWS email sending user/Section_0456E376214A4046BF2664B5BA0EE8B8/Access Key ID")\
     AWS_SECRET_ACCESS_KEY=$(op read "op://Tech Eng/AWS email sending user/Section_0456E376214A4046BF2664B5BA0EE8B8/Secret Access key")\
@@ -485,6 +504,12 @@ def create_cluster(
         emails=email,
         username=username,
         password=password,
+    )
+
+    create_seaweedfs(
+        release_name_prefix=release_name_prefix,
+        namespace=namespace,
+        is_debug=is_debug,
     )
 
     postgres_result: PostgresResult = create_postgres(
@@ -573,7 +598,7 @@ def create_postgres(
 
     if existing_postgres_release == postgres_release:
         typer.echo("A postgres release already exists in that namespace.")
-        raise typer.Exit(code=1)
+        return
 
     flags = ["--create-namespace", "--version", POSTGRES_HELM_CHART_VERSION]
     namespace_command = ["--namespace", namespace]
@@ -604,7 +629,7 @@ def create_postgres(
     # This uses the postgres user, which has the same password as the admin_user
     # to create a new user with superuser privileges.
     # This user will then be used by the avatar-api to bootstrap the database.
-    # This is because the bitnami/postgresql Helm chart does not allow to create 
+    # This is because the bitnami/postgresql Helm chart does not allow to create
     # a user with superuser privileges from the values.yaml file.
     # However, it can be done with a custom init script, but as the stuff below
     # was already written, we decided to keep it that way.
@@ -678,6 +703,121 @@ def create_postgres(
 
     save_result(postgres_result)
     return postgres_result
+
+
+@app.command()
+def create_seaweedfs(
+    release_name_prefix: str = typer.Option(
+        ..., envvar="RELEASE_NAME", help="Prefix used for all the helm releases."
+    ),
+    namespace: str = typer.Option(
+        ...,
+        envvar="NAMESPACE",
+        help="Name of the Kubernetes namespace to deploy the release in.",
+    ),
+    is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
+) -> SeaweedfsResult:
+    if not is_minikube_running():
+        typer.echo("Minikube must be running. Run with 'minikube start'.")
+        raise typer.Abort()
+
+    seaweedfs_release = get_release_name(Chart.SEAWEEDFS, release_name_prefix)
+
+    existing_seaweedfs_release = subprocess.check_output(
+        ["helm", "list", "--namespace", namespace, "--filter", seaweedfs_release, "-q"],
+        text=True,
+    ).strip()
+
+    if existing_seaweedfs_release == seaweedfs_release:
+        typer.echo("A seaweedfs release already exists in that namespace.")
+        return
+
+    flags = ["--create-namespace"]
+
+    namespace_command = ["--namespace", namespace]
+
+    mariadb_password = secrets.token_hex(16)
+    mariadb_root_password = secrets.token_hex(16)
+    values = [
+        "--set",
+        f"mariadb.auth.rootPassword={mariadb_password}",
+        "--set",
+        f"mariadb.auth.password={mariadb_root_password}",
+        "--set",
+        "s3.enabled=true",
+    ]
+
+    install_seaweedfs = [
+        "helm",
+        "install",
+        seaweedfs_release,
+        "oci://registry-1.docker.io/bitnamicharts/seaweedfs",
+        *flags,
+        *namespace_command,
+        *values,
+    ]
+
+    typer.echo("Creating seaweedfs Helm release...")
+    if is_debug:
+        typer.echo(" ".join(install_seaweedfs))
+
+    subprocess.call(
+        install_seaweedfs, stdout=subprocess.DEVNULL if not is_debug else None
+    )
+
+    seaweedfs_result = SeaweedfsResult(
+        release_name=seaweedfs_release,
+        namespace=namespace,
+        mariadb_password=mariadb_password,
+        mariadb_root_password=mariadb_root_password,
+    )
+
+    save_result(seaweedfs_result)
+
+    def wait_until_s3_pod_is_running(
+        *, is_debug: bool = False, nb_attempts_left: Optional[int] = None
+    ):
+        should_print_stderr = nb_attempts_left == 0 if nb_attempts_left else False
+
+        command = f"kubectl --namespace {namespace} get pods -l 'app.kubernetes.io/component=s3' -o json | jq '.items[].status.conditions[] | select(.type == \"Ready\") | .status'"
+        result = subprocess.run(command, shell=True, capture_output=True, text=True)
+
+        if result.returncode != 0 and should_print_stderr:
+            typer.echo(result.stderr)
+
+        status = result.stdout.strip()
+
+        if is_debug:
+            typer.echo(f"Pod status: {status}")
+
+        if status == '"True"':
+            raise StopIteration
+
+    do_retry(
+        wait_until_s3_pod_is_running,
+        on_success_message=f"Seaweedfs setup! release_name={seaweedfs_release}",
+        on_failure_message="Could not initialize seaweedfs",
+        sleep_for_seconds=60,
+        should_exit_on_failure=False,
+        is_debug=is_debug,
+    )
+
+    typer.echo("Port forwarding port 9333 from seaweed s3 api to host.")
+
+    subprocess.Popen(
+        [
+            "kubectl",
+            "port-forward",
+            "-n",
+            namespace,
+            "service/avatar-seaweedfs-s3",
+            "8333:8333",
+        ],
+        close_fds=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,  # an error is thrown, but port forwarding succeeds
+    )
+    return seaweedfs_result
 
 
 @app.command()
@@ -854,7 +994,7 @@ def create_avatar(
 
     values = list(
         chain.from_iterable(
-            ["--set", f"{key}={getattr(config,value)}"]
+            ["--set", f"{key}={getattr(config, value)}"]
             for key, value in KEY_MAPPING.items()
         )
     )

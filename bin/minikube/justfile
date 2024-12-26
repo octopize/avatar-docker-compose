@@ -1,0 +1,42 @@
+DOCKER_PULL_SECRET := env_var_or_default("DOCKER_PULL_SECRET", `op read "op://Tech Eng/DOCKER_PULL_SECRET/password"`)
+AWS_ACCESS_KEY_ID := env_var_or_default("AWS_ACCESS_KEY_ID", `op read "op://Tech Eng/AWS email sending user/Section_0456E376214A4046BF2664B5BA0EE8B8/Access Key ID"`)
+AWS_SECRET_ACCESS_KEY := env_var_or_default("AWS_SECRET_ACCESS_KEY", `op read "op://Tech Eng/AWS email sending user/Section_0456E376214A4046BF2664B5BA0EE8B8/Secret Access key"`)
+RELEASE_NAME := env_var_or_default("RELEASE_NAME", "avatar")
+
+# Exports all variables as env variables
+set export
+
+
+default:
+    @just -l
+
+install:
+    poetry install
+
+clean: ## Clean the config files saved in build
+    rm -rf build/*.json
+
+cluster *ARGS: ## Create a ready-to-go avatar cluster with default values
+     poetry run python launch.py create-cluster {{ARGS}}
+
+upgrade-cluster: ## Upgrade a avatar cluster
+    poetry run python launch.py create-avatar --upgrade-only
+
+delete-cluster NAMESPACE *ARGS: ## Delete a avatar cluster
+    poetry run python \
+        launch.py \
+        delete-cluster \
+        --release-name-prefix {{RELEASE_NAME}} \
+        --namespace {{NAMESPACE}} \
+        {{ARGS}}
+
+lint:  ## Run linting
+    @poetry run flake8 *.py
+
+lint-fix:  ## Run autoformatters
+    @poetry run black .
+    @poetry run isort .
+
+typecheck:  ## Run typechecking
+    @poetry run mypy --show-error-codes --pretty --show-traceback . --config ../pyproject.toml
+

@@ -23,13 +23,15 @@ SAVE_DIRECTORY = GIT_ROOT / "bin" / "minikube" / "build"
 POSTGRES_HELM_CHART_VERSION = "16.3.2"
 SEAWEEDFS_HELM_CHART_VERSION = "4.2.0"
 
+SEAWEED_FS_PORT = 8333
+
 
 class AuthKind(Enum):
     EMAIL = "email"
     USERNAME = "username"
 
 
-DEFAULT_AVATAR_VERSION = "0.0.4"
+DEFAULT_AVATAR_VERSION = "latest"
 DEFAULT_API_BASE_URL = "http://localhost:8000"
 
 DEFAULT_IS_SENTRY_ENABLED = False
@@ -38,7 +40,9 @@ DEFAULT_IS_TELEMETRY_ENABLED = False
 DEFAULT_PDFGENERATOR_VERSION = "latest"
 DEFAULT_AUTHENTICATION_KIND = AuthKind.USERNAME
 DEFAULT_ORGANIZATION_NAME = "octopize"
-DEFAULT_SHARED_STORAGE_PATH = "/home/avatar/shared"
+DEFAULT_SHARED_STORAGE_PATH = "s3://shared"
+
+
 DEFAULT_SHOULD_USE_LOCAL_STORAGE = True
 DEFAULT_LOG_LEVEL = "INFO"
 
@@ -104,6 +108,7 @@ class AvatarHelmConfig(HelmConfig):
 
     postgres_host: str
     shared_storage_path: str
+    aws_endpoint_url: str
 
     avatar_api_url: str
     avatar_version: str
@@ -121,6 +126,8 @@ class AvatarHelmConfig(HelmConfig):
     pdfgenerator_memory_request: str
     api_cpu_request: str
     pdfgenerator_cpu_request: str
+
+
 
 
 class Result(BaseModel):
@@ -802,7 +809,7 @@ def create_seaweedfs(
         is_debug=is_debug,
     )
 
-    typer.echo("Port forwarding port 9333 from seaweed s3 api to host.")
+    typer.echo(f"Port forwarding port {SEAWEED_FS_PORT} from seaweed s3 api to host.")
 
     subprocess.Popen(
         [
@@ -811,7 +818,7 @@ def create_seaweedfs(
             "-n",
             namespace,
             "service/avatar-seaweedfs-s3",
-            "8333:8333",
+            f"{SEAWEED_FS_PORT}:{SEAWEED_FS_PORT}",
         ],
         close_fds=True,
         stdout=subprocess.DEVNULL,
@@ -927,11 +934,6 @@ def create_avatar(
     Create the avatar component hosting the Avatar API.
     """
 
-    if not shared_storage_path.startswith("/"):
-        raise InvalidConfig(
-            "Only absolute filesystem paths are allowed for file storage, no URL to cloud storage."
-        )
-
     authentication = get_authentication(
         use_email_authentication=use_email_authentication,
         aws_mail_account_access_key_id=aws_mail_account_access_key_id,
@@ -949,7 +951,7 @@ def create_avatar(
         raise typer.Abort()
 
     avatar_release_name = get_release_name(Chart.AVATAR, release_name_prefix)
-
+    seaweed_release_name = get_release_name(Chart.SEAWEEDFS, release_name_prefix)
     config = AvatarHelmConfig(
         release_name=avatar_release_name,
         namespace=namespace,
@@ -958,6 +960,7 @@ def create_avatar(
         docker_pull_secret=docker_pull_secret,
         pdfgenerator_version=pdfgenerator_version,
         shared_storage_path=shared_storage_path,
+        aws_endpoint_url=f"http://{seaweed_release_name}:{SEAWEED_FS_PORT}",
         db_password=db_password,
         db_user=db_user,
         db_name=db_name,

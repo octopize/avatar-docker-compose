@@ -1,6 +1,8 @@
+import base64
 import json
 import secrets
 import subprocess
+import tempfile
 import time
 from enum import Enum
 from itertools import chain
@@ -128,8 +130,6 @@ class AvatarHelmConfig(HelmConfig):
     pdfgenerator_cpu_request: str
 
 
-
-
 class Result(BaseModel):
     namespace: str
     release_name: str
@@ -250,8 +250,7 @@ def get_release_name(chart: Chart, release_name_prefix: str) -> str:
 
 
 class RetryCallable(Protocol):
-    def __call__(self, *, nb_attempts_left: int, is_debug: bool) -> None:
-        ...
+    def __call__(self, *, nb_attempts_left: int, is_debug: bool) -> None: ...
 
 
 def do_retry(
@@ -304,6 +303,21 @@ def do_retry(
         raise typer.Exit(1)
 
 
+def get_secrets(namespace: str) -> list[str]:
+    get_secrets_command = f"kubectl get secrets --no-headers=true -o custom-columns=:metadata.name --namespace {namespace}".split()
+    secrets = subprocess.check_output(get_secrets_command, text=True).splitlines()
+    return secrets
+
+def delete_secret(namespace: str, secret: str, is_debug: bool) -> None:
+    delete_secret_command = f"kubectl delete secret {secret} --namespace {namespace}".split()
+    if is_debug:
+        typer.echo(f"Deleting secret {secret}...")
+
+    subprocess.run(
+        delete_secret_command,
+        stdout=subprocess.DEVNULL if not is_debug else None,
+    )
+
 @app.command()
 def delete_cluster(
     release_name_prefix: str = typer.Option(
@@ -316,77 +330,95 @@ def delete_cluster(
     ),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ):
-    get_pvcs = f"kubectl get pvc --no-headers=true -o custom-columns=:metadata.name --namespace {namespace}".split()  # noqa: E501
-    pvcs = subprocess.check_output(get_pvcs, text=True).splitlines()
+    
+    for pvc in _get_pvcs(namespace):
+        delete_pvc(namespace, pvc, is_debug=is_debug)
 
-    # All PersistantVolumeClaims have a deletion protection finalizer, which
-    # prevents them from being deleted.
-    # We remove the finalizer before deleting the volume claim.
-    patch = r'{"metadata" :{"finalizers" : []}}'
-    for pvc in pvcs:
-        remove_deletion_protection = [
-            "kubectl",
-            "patch",
-            "pvc",
-            pvc,
-            "-p",
-            patch,
-            "--type=merge",
-            "--namespace",
-            namespace,
-            "--allow-missing-template-keys=false",
-        ]
-
-        delete_pvc = f"kubectl delete pvc {pvc} --namespace {namespace}".split()
-
-        # For some reason, doing a patch call before a delete call does not manage to modify remove
-        # the finalizers before the deletion is started,
-        # so it still waits indefinitely if we don't specify --wait=false.
-        delete_pvc += ["--wait=false"]
-
-        if is_debug:
-            typer.echo(f"Deleting {pvc=}")
-            typer.echo(" ".join(remove_deletion_protection))
-
-        subprocess.run(
-            delete_pvc,
-            stdout=subprocess.DEVNULL if not is_debug else None,
-        )
-
-        if is_debug:
-            typer.echo(f"Removing deletion protection from {pvc=}")
-            typer.echo(" ".join(remove_deletion_protection))
-
-        subprocess.run(
-            remove_deletion_protection,
-            stdout=subprocess.DEVNULL if not is_debug else None,
-        )
-
+    secrets = get_secrets(namespace)
+    for secret in secrets:
+        delete_secret(namespace, secret, is_debug=is_debug)
+    
+    
     releases = [
         get_release_name(release_name_prefix=release_name_prefix, chart=chart)
         for chart in Chart
     ]
 
     for release in releases:
-        uninstall_command = ["helm", "uninstall", release, "--namespace", namespace]
+        _delete_releases(namespace, release, is_debug=is_debug)
+
+
+
+def _delete_releases(namespace: str, release: str, *, is_debug: bool) -> None:
+    uninstall_command = ["helm", "uninstall", release, "--namespace", namespace]
+    if is_debug:
+        typer.echo(f"Deleting Helm release {release}...")
+        typer.echo(" ".join(uninstall_command))
+
+    result = subprocess.run(
+        uninstall_command,
+        stdout=subprocess.DEVNULL if not is_debug else None,
+        stderr=subprocess.DEVNULL if not is_debug else subprocess.PIPE,
+        text=True,
+    )
+
+    return_code = result.returncode
+    if return_code != 0:
         if is_debug:
-            typer.echo(f"Deleting Helm release {release}...")
-            typer.echo(" ".join(uninstall_command))
+            typer.echo(result.stderr)
+        typer.echo(f"Could not delete Helm release {release}.")
+    else:
+        typer.echo(f"Deleted Helm release {release}.")
 
-        result = subprocess.run(
-            uninstall_command,
-            stdout=subprocess.DEVNULL if not is_debug else None,
-            stderr=subprocess.DEVNULL if not is_debug else subprocess.PIPE,
-            text=True,
-        )
 
-        return_code = result.returncode
-        if return_code != 0:
-            if is_debug:
-                typer.echo(result.stderr)
-            typer.echo(f"Could not delete Helm release {release}.")
-        else:
-            typer.echo(f"Deleted Helm release {release}.")
+def _get_pvcs(namespace):
+    get_pvcs = f"kubectl get pvc --no-headers=true -o custom-columns=:metadata.name --namespace {namespace}".split()  # noqa: E501
+    pvcs = subprocess.check_output(get_pvcs, text=True).splitlines()
+    return pvcs
+
+
+def delete_pvc(namespace: str, pvc: str, is_debug: bool) -> None:
+    # All PersistantVolumeClaims have a deletion protection finalizer, which
+    # prevents them from being deleted.
+    # We remove the finalizer before deleting the volume claim.
+    patch = r'{"metadata" :{"finalizers" : []}}'
+    remove_deletion_protection = [
+        "kubectl",
+        "patch",
+        "pvc",
+        pvc,
+        "-p",
+        patch,
+        "--type=merge",
+        "--namespace",
+        namespace,
+        "--allow-missing-template-keys=false",
+    ]
+
+    delete_pvc = f"kubectl delete pvc {pvc} --namespace {namespace}".split()
+
+    # For some reason, doing a patch call before a delete call does not manage to modify remove
+    # the finalizers before the deletion is started,
+    # so it still waits indefinitely if we don't specify --wait=false.
+    delete_pvc += ["--wait=false"]
+
+    if is_debug:
+        typer.echo(f"Deleting {pvc=}")
+        typer.echo(" ".join(remove_deletion_protection))
+
+    subprocess.run(
+        delete_pvc,
+        stdout=subprocess.DEVNULL if not is_debug else None,
+    )
+
+    if is_debug:
+        typer.echo(f"Removing deletion protection from {pvc=}")
+        typer.echo(" ".join(remove_deletion_protection))
+
+    subprocess.run(
+        remove_deletion_protection,
+        stdout=subprocess.DEVNULL if not is_debug else None,
+    )
 
 
 @app.command()
@@ -712,6 +744,60 @@ def create_postgres(
     return postgres_result
 
 
+def create_s3_auth_secret(namespace: str, s3_fullname: str, is_debug: bool) -> None:
+    admin_access_key_id = base64.b64encode(secrets.token_hex(16).encode()).decode()
+    admin_secret_access_key = base64.b64encode(secrets.token_hex(32).encode()).decode()
+    secret_name = f"{s3_fullname}"
+    secret_yaml = f"""
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {secret_name}
+  namespace: {namespace}
+  labels:
+    app.kubernetes.io/component: s3
+type: Opaque
+data:
+  admin_access_key_id: {admin_access_key_id}
+  admin_secret_access_key: {admin_secret_access_key}
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        secret_file_path = Path(tmpdirname) / f"{s3_fullname}-auth-secret.yaml"
+        with open(secret_file_path, "w") as f:
+            f.write(secret_yaml)
+
+        # Create namespace if it does not exist
+        typer.echo("Creating namespace...")
+        result = subprocess.run(
+            ["kubectl", "create", "namespace", namespace],
+            stdout=subprocess.DEVNULL,
+            text=True,
+            stderr=subprocess.PIPE,
+        )
+
+        if result.returncode != 0:
+            if "already exists" in result.stderr:
+                typer.echo("Namespace already exists.")
+            else:
+                typer.echo(result.stderr)
+                raise typer.Exit(result.returncode)
+
+        result = subprocess.run(
+            ["kubectl", "apply", "-f", secret_file_path, "--namespace", namespace],
+            text=True,
+            stdout=subprocess.DEVNULL if not is_debug else None,
+            stderr=subprocess.PIPE,
+        )
+
+        if result.returncode != 0:
+            typer.echo(result.stderr)
+            typer.echo("Could not create secret.")
+            raise typer.Exit(result.returncode)
+
+    return secret_name
+
+
 @app.command()
 def create_seaweedfs(
     release_name_prefix: str = typer.Option(
@@ -739,26 +825,34 @@ def create_seaweedfs(
         typer.echo("A seaweedfs release already exists in that namespace.")
         return
 
-    flags = ["--create-namespace"]
+    flags = ["--create-namespace","--debug"]
 
     namespace_command = ["--namespace", namespace]
 
     mariadb_password = secrets.token_hex(16)
     mariadb_root_password = secrets.token_hex(16)
-    values = [
-        "--set",
+
+    # We are creating a secret because, by default, the seaweedfs Helm chart
+    # create an admin will all priviledges AND a user with read priviledges.
+    # We want no default user to have read priviledges, so we only specify the admin user.
+    secret_name = create_s3_auth_secret(namespace, f"{seaweedfs_release}-s3", is_debug)
+
+    values_to_set = [
         f"mariadb.auth.rootPassword={mariadb_password}",
-        "--set",
         f"mariadb.auth.password={mariadb_root_password}",
-        "--set",
         "s3.enabled=true",
+        "s3.auth.enabled=true",
+        # f"s3.auth.existingSecret={secret_name}",
+        "iam.enabled=true",
     ]
+
+    values = list(chain.from_iterable(["--set", v] for v in values_to_set))
 
     install_seaweedfs = [
         "helm",
         "install",
         seaweedfs_release,
-        "oci://registry-1.docker.io/bitnamicharts/seaweedfs",
+        "/home/tom/Documents/dev/bitnami-charts/bitnami/seaweedfs",
         *flags,
         *namespace_command,
         *values,

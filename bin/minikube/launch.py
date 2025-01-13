@@ -1,6 +1,8 @@
+import base64
 import json
 import secrets
 import subprocess
+import tempfile
 import time
 from enum import Enum
 from itertools import chain
@@ -128,8 +130,6 @@ class AvatarHelmConfig(HelmConfig):
     pdfgenerator_cpu_request: str
 
 
-
-
 class Result(BaseModel):
     namespace: str
     release_name: str
@@ -250,8 +250,7 @@ def get_release_name(chart: Chart, release_name_prefix: str) -> str:
 
 
 class RetryCallable(Protocol):
-    def __call__(self, *, nb_attempts_left: int, is_debug: bool) -> None:
-        ...
+    def __call__(self, *, nb_attempts_left: int, is_debug: bool) -> None: ...
 
 
 def do_retry(
@@ -302,6 +301,25 @@ def do_retry(
 
     if should_exit_on_failure:
         raise typer.Exit(1)
+
+
+def get_secrets(namespace: str) -> list[str]:
+    get_secrets_command = f"kubectl get secrets --no-headers=true -o custom-columns=:metadata.name --namespace {namespace}".split()
+    secrets = subprocess.check_output(get_secrets_command, text=True).splitlines()
+    return secrets
+
+
+def delete_secret(namespace: str, secret: str, is_debug: bool) -> None:
+    delete_secret_command = (
+        f"kubectl delete secret {secret} --namespace {namespace}".split()
+    )
+    if is_debug:
+        typer.echo(f"Deleting secret {secret}...")
+
+    subprocess.run(
+        delete_secret_command,
+        stdout=subprocess.DEVNULL if not is_debug else None,
+    )
 
 
 @app.command()
@@ -387,6 +405,31 @@ def delete_cluster(
             typer.echo(f"Could not delete Helm release {release}.")
         else:
             typer.echo(f"Deleted Helm release {release}.")
+
+    for secret in get_secrets(namespace):
+        delete_secret(namespace, secret, is_debug=is_debug)
+
+
+def _delete_releases(namespace: str, release: str, *, is_debug: bool) -> None:
+    uninstall_command = ["helm", "uninstall", release, "--namespace", namespace]
+    if is_debug:
+        typer.echo(f"Deleting Helm release {release}...")
+        typer.echo(" ".join(uninstall_command))
+
+    result = subprocess.run(
+        uninstall_command,
+        stdout=subprocess.DEVNULL if not is_debug else None,
+        stderr=subprocess.DEVNULL if not is_debug else subprocess.PIPE,
+        text=True,
+    )
+
+    return_code = result.returncode
+    if return_code != 0:
+        if is_debug:
+            typer.echo(result.stderr)
+        typer.echo(f"Could not delete Helm release {release}.")
+    else:
+        typer.echo(f"Deleted Helm release {release}.")
 
 
 @app.command()
@@ -712,6 +755,88 @@ def create_postgres(
     return postgres_result
 
 
+def create_s3_auth_secret(namespace: str, s3_fullname: str, is_debug: bool) -> None:
+    admin_access_key_id = secrets.token_hex(16)
+    admin_secret_access_key = secrets.token_hex(32)
+
+    data = """
+{
+  "identities": [
+    {
+      "name": "admin",
+      "credentials": [
+        {
+          "accessKey": "#ADMIN_ACCESS_KEY_ID#",
+          "secretKey": "#ADMIN_SECRET_ACCESS_KEY#"
+        }
+      ],
+      "actions": [
+        "Admin",
+        "Read",
+        "List",
+        "Tagging",
+        "Write"
+      ]
+    }
+  ]
+}
+"""
+    # Using this instead of f-string because of python 3.10 f-string limitations
+    data = data.replace("#ADMIN_ACCESS_KEY_ID#", admin_access_key_id)
+    data = data.replace("#ADMIN_SECRET_ACCESS_KEY#", admin_secret_access_key)
+
+    base64_data = base64.b64encode(data.encode()).decode()
+    secret_name = f"{s3_fullname}"
+
+    secret_yaml = f"""
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {secret_name}
+  namespace: {namespace}
+  labels:
+    app.kubernetes.io/component: s3
+type: Opaque
+data:
+  config.json: {base64_data}
+"""
+
+    with tempfile.TemporaryDirectory() as tmpdirname:
+        secret_file_path = Path(tmpdirname) / f"{s3_fullname}-auth-secret.yaml"
+        with open(secret_file_path, "w") as f:
+            f.write(secret_yaml)
+
+        # Create namespace if it does not exist
+        typer.echo("Creating namespace...")
+        result = subprocess.run(
+            ["kubectl", "create", "namespace", namespace],
+            stdout=subprocess.DEVNULL,
+            text=True,
+            stderr=subprocess.PIPE,
+        )
+
+        if result.returncode != 0:
+            if "already exists" in result.stderr:
+                typer.echo("Namespace already exists.")
+            else:
+                typer.echo(result.stderr)
+                raise typer.Exit(result.returncode)
+
+        result = subprocess.run(
+            ["kubectl", "apply", "-f", secret_file_path, "--namespace", namespace],
+            text=True,
+            stdout=subprocess.DEVNULL if not is_debug else None,
+            stderr=subprocess.PIPE,
+        )
+
+        if result.returncode != 0:
+            typer.echo(result.stderr)
+            typer.echo("Could not create secret.")
+            raise typer.Exit(result.returncode)
+
+    return secret_name
+
+
 @app.command()
 def create_seaweedfs(
     release_name_prefix: str = typer.Option(
@@ -739,26 +864,34 @@ def create_seaweedfs(
         typer.echo("A seaweedfs release already exists in that namespace.")
         return
 
-    flags = ["--create-namespace"]
+    flags = ["--create-namespace", "--debug"]
 
     namespace_command = ["--namespace", namespace]
 
     mariadb_password = secrets.token_hex(16)
     mariadb_root_password = secrets.token_hex(16)
-    values = [
-        "--set",
+
+    # We are creating a secret because, by default, the seaweedfs Helm chart
+    # create an admin will all priviledges AND a user with read priviledges.
+    # We want no default user to have read priviledges, so we only specify the admin user.
+    secret_name = create_s3_auth_secret(namespace, f"{seaweedfs_release}-s3", is_debug)
+
+    values_to_set = [
         f"mariadb.auth.rootPassword={mariadb_password}",
-        "--set",
         f"mariadb.auth.password={mariadb_root_password}",
-        "--set",
         "s3.enabled=true",
+        "s3.auth.enabled=true",
+        f"s3.auth.existingSecret={secret_name}",
+        "iam.enabled=true",
     ]
+
+    values = list(chain.from_iterable(["--set", v] for v in values_to_set))
 
     install_seaweedfs = [
         "helm",
         "install",
         seaweedfs_release,
-        "oci://registry-1.docker.io/bitnamicharts/seaweedfs",
+        "/home/tom/Documents/dev/bitnami-charts/bitnami/seaweedfs",
         *flags,
         *namespace_command,
         *values,

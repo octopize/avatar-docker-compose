@@ -756,9 +756,38 @@ def create_postgres(
 
 
 def create_s3_auth_secret(namespace: str, s3_fullname: str, is_debug: bool) -> None:
-    admin_access_key_id = base64.b64encode(secrets.token_hex(16).encode()).decode()
-    admin_secret_access_key = base64.b64encode(secrets.token_hex(32).encode()).decode()
+    admin_access_key_id = secrets.token_hex(16)
+    admin_secret_access_key = secrets.token_hex(32)
+
+    data = """
+{
+  "identities": [
+    {
+      "name": "admin",
+      "credentials": [
+        {
+          "accessKey": "#ADMIN_ACCESS_KEY_ID#",
+          "secretKey": "#ADMIN_SECRET_ACCESS_KEY#"
+        }
+      ],
+      "actions": [
+        "Admin",
+        "Read",
+        "List",
+        "Tagging",
+        "Write"
+      ]
+    }
+  ]
+}
+"""
+    # Using this instead of f-string because of python 3.10 f-string limitations
+    data = data.replace("#ADMIN_ACCESS_KEY_ID#", admin_access_key_id)
+    data = data.replace("#ADMIN_SECRET_ACCESS_KEY#", admin_secret_access_key)
+
+    base64_data = base64.b64encode(data.encode()).decode()
     secret_name = f"{s3_fullname}"
+
     secret_yaml = f"""
 apiVersion: v1
 kind: Secret
@@ -769,8 +798,7 @@ metadata:
     app.kubernetes.io/component: s3
 type: Opaque
 data:
-  admin_access_key_id: {admin_access_key_id}
-  admin_secret_access_key: {admin_secret_access_key}
+  config.json: {base64_data}
 """
 
     with tempfile.TemporaryDirectory() as tmpdirname:
@@ -853,7 +881,7 @@ def create_seaweedfs(
         f"mariadb.auth.password={mariadb_root_password}",
         "s3.enabled=true",
         "s3.auth.enabled=true",
-        # f"s3.auth.existingSecret={secret_name}",
+        f"s3.auth.existingSecret={secret_name}",
         "iam.enabled=true",
     ]
 

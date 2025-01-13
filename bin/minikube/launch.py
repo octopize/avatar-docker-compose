@@ -308,8 +308,11 @@ def get_secrets(namespace: str) -> list[str]:
     secrets = subprocess.check_output(get_secrets_command, text=True).splitlines()
     return secrets
 
+
 def delete_secret(namespace: str, secret: str, is_debug: bool) -> None:
-    delete_secret_command = f"kubectl delete secret {secret} --namespace {namespace}".split()
+    delete_secret_command = (
+        f"kubectl delete secret {secret} --namespace {namespace}".split()
+    )
     if is_debug:
         typer.echo(f"Deleting secret {secret}...")
 
@@ -317,6 +320,7 @@ def delete_secret(namespace: str, secret: str, is_debug: bool) -> None:
         delete_secret_command,
         stdout=subprocess.DEVNULL if not is_debug else None,
     )
+
 
 @app.command()
 def delete_cluster(
@@ -330,23 +334,80 @@ def delete_cluster(
     ),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ):
-    
-    for pvc in _get_pvcs(namespace):
-        delete_pvc(namespace, pvc, is_debug=is_debug)
+    get_pvcs = f"kubectl get pvc --no-headers=true -o custom-columns=:metadata.name --namespace {namespace}".split()  # noqa: E501
+    pvcs = subprocess.check_output(get_pvcs, text=True).splitlines()
 
-    secrets = get_secrets(namespace)
-    for secret in secrets:
-        delete_secret(namespace, secret, is_debug=is_debug)
-    
-    
+    # All PersistantVolumeClaims have a deletion protection finalizer, which
+    # prevents them from being deleted.
+    # We remove the finalizer before deleting the volume claim.
+    patch = r'{"metadata" :{"finalizers" : []}}'
+    for pvc in pvcs:
+        remove_deletion_protection = [
+            "kubectl",
+            "patch",
+            "pvc",
+            pvc,
+            "-p",
+            patch,
+            "--type=merge",
+            "--namespace",
+            namespace,
+            "--allow-missing-template-keys=false",
+        ]
+
+        delete_pvc = f"kubectl delete pvc {pvc} --namespace {namespace}".split()
+
+        # For some reason, doing a patch call before a delete call does not manage to modify remove
+        # the finalizers before the deletion is started,
+        # so it still waits indefinitely if we don't specify --wait=false.
+        delete_pvc += ["--wait=false"]
+
+        if is_debug:
+            typer.echo(f"Deleting {pvc=}")
+            typer.echo(" ".join(remove_deletion_protection))
+
+        subprocess.run(
+            delete_pvc,
+            stdout=subprocess.DEVNULL if not is_debug else None,
+        )
+
+        if is_debug:
+            typer.echo(f"Removing deletion protection from {pvc=}")
+            typer.echo(" ".join(remove_deletion_protection))
+
+        subprocess.run(
+            remove_deletion_protection,
+            stdout=subprocess.DEVNULL if not is_debug else None,
+        )
+
     releases = [
         get_release_name(release_name_prefix=release_name_prefix, chart=chart)
         for chart in Chart
     ]
 
     for release in releases:
-        _delete_releases(namespace, release, is_debug=is_debug)
+        uninstall_command = ["helm", "uninstall", release, "--namespace", namespace]
+        if is_debug:
+            typer.echo(f"Deleting Helm release {release}...")
+            typer.echo(" ".join(uninstall_command))
 
+        result = subprocess.run(
+            uninstall_command,
+            stdout=subprocess.DEVNULL if not is_debug else None,
+            stderr=subprocess.DEVNULL if not is_debug else subprocess.PIPE,
+            text=True,
+        )
+
+        return_code = result.returncode
+        if return_code != 0:
+            if is_debug:
+                typer.echo(result.stderr)
+            typer.echo(f"Could not delete Helm release {release}.")
+        else:
+            typer.echo(f"Deleted Helm release {release}.")
+
+    for secret in get_secrets(namespace):
+        delete_secret(namespace, secret, is_debug=is_debug)
 
 
 def _delete_releases(namespace: str, release: str, *, is_debug: bool) -> None:
@@ -369,56 +430,6 @@ def _delete_releases(namespace: str, release: str, *, is_debug: bool) -> None:
         typer.echo(f"Could not delete Helm release {release}.")
     else:
         typer.echo(f"Deleted Helm release {release}.")
-
-
-def _get_pvcs(namespace):
-    get_pvcs = f"kubectl get pvc --no-headers=true -o custom-columns=:metadata.name --namespace {namespace}".split()  # noqa: E501
-    pvcs = subprocess.check_output(get_pvcs, text=True).splitlines()
-    return pvcs
-
-
-def delete_pvc(namespace: str, pvc: str, is_debug: bool) -> None:
-    # All PersistantVolumeClaims have a deletion protection finalizer, which
-    # prevents them from being deleted.
-    # We remove the finalizer before deleting the volume claim.
-    patch = r'{"metadata" :{"finalizers" : []}}'
-    remove_deletion_protection = [
-        "kubectl",
-        "patch",
-        "pvc",
-        pvc,
-        "-p",
-        patch,
-        "--type=merge",
-        "--namespace",
-        namespace,
-        "--allow-missing-template-keys=false",
-    ]
-
-    delete_pvc = f"kubectl delete pvc {pvc} --namespace {namespace}".split()
-
-    # For some reason, doing a patch call before a delete call does not manage to modify remove
-    # the finalizers before the deletion is started,
-    # so it still waits indefinitely if we don't specify --wait=false.
-    delete_pvc += ["--wait=false"]
-
-    if is_debug:
-        typer.echo(f"Deleting {pvc=}")
-        typer.echo(" ".join(remove_deletion_protection))
-
-    subprocess.run(
-        delete_pvc,
-        stdout=subprocess.DEVNULL if not is_debug else None,
-    )
-
-    if is_debug:
-        typer.echo(f"Removing deletion protection from {pvc=}")
-        typer.echo(" ".join(remove_deletion_protection))
-
-    subprocess.run(
-        remove_deletion_protection,
-        stdout=subprocess.DEVNULL if not is_debug else None,
-    )
 
 
 @app.command()
@@ -825,7 +836,7 @@ def create_seaweedfs(
         typer.echo("A seaweedfs release already exists in that namespace.")
         return
 
-    flags = ["--create-namespace","--debug"]
+    flags = ["--create-namespace", "--debug"]
 
     namespace_command = ["--namespace", namespace]
 

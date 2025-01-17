@@ -25,7 +25,10 @@ SAVE_DIRECTORY = GIT_ROOT / "bin" / "minikube" / "build"
 POSTGRES_HELM_CHART_VERSION = "16.3.2"
 SEAWEEDFS_HELM_CHART_VERSION = "4.2.0"
 
-SEAWEED_FS_PORT = 8333
+SEAWEEDFS_IMAGE_REGISTRY = "quay.io"
+SEAWEEDFS_IMAGE_REPOSITORY = "octopize/seaweedfs"
+SEAWEED_FS_S3_PORT = 8333
+SEAWEED_FS_IAM_PORT = 8111
 
 
 class AuthKind(Enum):
@@ -156,6 +159,9 @@ class AvatarResult(Result):
 class SeaweedfsResult(Result):
     mariadb_password: str
     mariadb_root_password: str
+    # admin_access_key_id: str 
+    # admin_secret_access_key: str 
+
 
 
 KEY_MAPPING = {
@@ -559,6 +565,7 @@ def create_cluster(
     create_seaweedfs(
         release_name_prefix=release_name_prefix,
         namespace=namespace,
+        docker_pull_secret=docker_pull_secret,
         is_debug=is_debug,
     )
 
@@ -755,7 +762,9 @@ def create_postgres(
     return postgres_result
 
 
-def create_s3_auth_secret(namespace: str, s3_fullname: str, is_debug: bool) -> None:
+def create_s3_auth_secret(
+    namespace: str, s3_fullname: str, is_debug: bool
+) -> tuple[str, str, str]:
     admin_access_key_id = secrets.token_hex(16)
     admin_secret_access_key = secrets.token_hex(32)
 
@@ -785,7 +794,7 @@ def create_s3_auth_secret(namespace: str, s3_fullname: str, is_debug: bool) -> N
     data = data.replace("#ADMIN_ACCESS_KEY_ID#", admin_access_key_id)
     data = data.replace("#ADMIN_SECRET_ACCESS_KEY#", admin_secret_access_key)
 
-    base64_data = base64.b64encode(data.encode()).decode()
+    base64_data = to_b64(data)
     secret_name = f"{s3_fullname}"
 
     secret_yaml = f"""
@@ -801,10 +810,19 @@ data:
   config.json: {base64_data}
 """
 
+    apply_kubectl_yaml(secret_yaml, namespace, is_debug=is_debug)
+
+    return secret_name, admin_access_key_id, admin_secret_access_key
+
+
+def apply_kubectl_yaml(yaml_string: str, namespace: str, *, is_debug: str):
     with tempfile.TemporaryDirectory() as tmpdirname:
-        secret_file_path = Path(tmpdirname) / f"{s3_fullname}-auth-secret.yaml"
+        secret_file_path = (
+            Path(tmpdirname)
+            / f"helm-{namespace}-yaml-to-apply-{secrets.token_hex(5)}.yaml"
+        )
         with open(secret_file_path, "w") as f:
-            f.write(secret_yaml)
+            f.write(yaml_string)
 
         # Create namespace if it does not exist
         typer.echo("Creating namespace...")
@@ -834,8 +852,6 @@ data:
             typer.echo("Could not create secret.")
             raise typer.Exit(result.returncode)
 
-    return secret_name
-
 
 @app.command()
 def create_seaweedfs(
@@ -846,6 +862,11 @@ def create_seaweedfs(
         ...,
         envvar="NAMESPACE",
         help="Name of the Kubernetes namespace to deploy the release in.",
+    ),
+    docker_pull_secret: str = typer.Option(
+        ...,
+        envvar="DOCKER_PULL_SECRET",
+        help="Docker secret used to pull the images. Can be found on quay.io or 1Password.",
     ),
     is_debug: bool = typer.Option(False, "--debug", help="Show verbose output."),
 ) -> SeaweedfsResult:
@@ -871,45 +892,128 @@ def create_seaweedfs(
     mariadb_password = secrets.token_hex(16)
     mariadb_root_password = secrets.token_hex(16)
 
-    # We are creating a secret because, by default, the seaweedfs Helm chart
-    # create an admin will all priviledges AND a user with read priviledges.
-    # We want no default user to have read priviledges, so we only specify the admin user.
-    secret_name = create_s3_auth_secret(namespace, f"{seaweedfs_release}-s3", is_debug)
+    # # We are creating a secret because, by default, the seaweedfs Helm chart
+    # # create an admin will all priviledges AND a user with read priviledges.
+    # # We want no default user to have read priviledges, so we only specify the admin user.
+    # secret_name, admin_access_key_id, admin_secret_access_key = create_s3_auth_secret(
+    #     namespace, f"{seaweedfs_release}-s3", is_debug
+    # )
+
+    # We are creating the secret so that the seaweedfs pods can pull our quay.io seaweedfs image
+    image_pull_secret = create_docker_pull_secret_seaweedfs(
+        docker_pull_secret, namespace, is_debug=is_debug
+    )
 
     values_to_set = [
         f"mariadb.auth.rootPassword={mariadb_password}",
         f"mariadb.auth.password={mariadb_root_password}",
         "s3.enabled=true",
-        "s3.auth.enabled=true",
-        f"s3.auth.existingSecret={secret_name}",
+        # enable the s3 auth will enable static configuration, but we want to do dynamic
+        # "s3.auth.enabled=true",
+        # f"s3.auth.existingSecret={secret_name}",
         "iam.enabled=true",
+        f"image.registry={SEAWEEDFS_IMAGE_REGISTRY}",
+        f"image.repository={SEAWEEDFS_IMAGE_REPOSITORY}",
+        "image.tag=latest",
+        f"image.pullSecrets[0]={image_pull_secret}",
+        "global.security.allowInsecureImages=true",  # necessary to use images not signed by bitnami
+        "master.volumeSizeLimitMB=10",
+
     ]
+
 
     values = list(chain.from_iterable(["--set", v] for v in values_to_set))
 
-    install_seaweedfs = [
-        "helm",
-        "install",
+    # We are increasing the maximum number of volumes like this because if doing it with --set
+    # it will override the default values for the other properties of the existing volume.
+    increase_nb_volumes_file = []
+    tempfile_path = Path(tempfile.mkdtemp()) / "seaweedfs-values.yaml"
+    with open(tempfile_path, "w") as f:
+        f.write(
+            """
+volume:
+  dataVolumes:
+    - name: data-0
+      mountPath: /data-0
+      subPath: ""
+      maxVolumes: 10000
+      persistence:
+        enabled: true
+        storageClass: ""
+        annotations: {}
+        accessModes:
+          - ReadWriteOnce
+        size: 8Gi
+        existingClaim: ""
+        selector: {}
+        dataSource: {}
+"""
+        )
+
+
+        increase_nb_volumes_file = ["-f", tempfile_path]
+
+
+
+
+
+
+
+    args = [
         seaweedfs_release,
         "/home/tom/Documents/dev/bitnami-charts/bitnami/seaweedfs",
         *flags,
         *namespace_command,
         *values,
+        *increase_nb_volumes_file,
+    ]
+
+
+
+
+
+    if is_debug:
+        template_seaweedfs = [
+            "helm",
+            "template",
+            *args,
+        ]
+        typer.echo(" ".join(template_seaweedfs))
+
+        result = subprocess.run(
+            template_seaweedfs, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+
+        typer.echo(result.stdout)
+        typer.echo(result.stderr)
+
+
+    install_seaweedfs = [
+        "helm",
+        "install",
+        *args,
     ]
 
     typer.echo("Creating seaweedfs Helm release...")
     if is_debug:
         typer.echo(" ".join(install_seaweedfs))
 
-    subprocess.call(
-        install_seaweedfs, stdout=subprocess.DEVNULL if not is_debug else None
+    result = subprocess.run(
+        install_seaweedfs, stdout=subprocess.DEVNULL if not is_debug else None, stderr=subprocess.PIPE
     )
+
+    if result.returncode != 0:
+        typer.echo(result.stderr)
+        typer.echo(result.stdout)
+
 
     seaweedfs_result = SeaweedfsResult(
         release_name=seaweedfs_release,
         namespace=namespace,
         mariadb_password=mariadb_password,
         mariadb_root_password=mariadb_root_password,
+        # admin_access_key_id=admin_access_key_id,
+        # admin_secret_access_key=admin_secret_access_key,
     )
 
     save_result(seaweedfs_result)
@@ -942,22 +1046,64 @@ def create_seaweedfs(
         is_debug=is_debug,
     )
 
-    typer.echo(f"Port forwarding port {SEAWEED_FS_PORT} from seaweed s3 api to host.")
+    create_port_forward(
+        namespace, SEAWEED_FS_S3_PORT, SEAWEED_FS_IAM_PORT, "avatar-seaweedfs-s3"
+    )
+    create_port_forward(
+        namespace, SEAWEED_FS_IAM_PORT, SEAWEED_FS_S3_PORT, "avatar-seaweedfs-iam"
+    )
 
+    typer.echo("Useful commands")
+    typer.echo("Seaweedfs S3\n============")
+    # typer.echo(
+    #     f"AWS_ACCESS_KEY_ID={admin_access_key_id} AWS_SECRET_ACCESS_KEY={admin_secret_access_key} aws --endpoint-url=http://localhost:{SEAWEED_FS_S3_PORT} s3 ls"
+    # )
+
+    return seaweedfs_result
+
+
+def to_b64(data: str) -> str:
+    return base64.b64encode(data.encode()).decode()
+
+
+def create_docker_pull_secret_seaweedfs(
+    docker_pull_secret: str, namespace: str, *, is_debug: bool
+) -> str:
+    secret_name = "docker-local-pull-secret-for-seaweedfs"
+    secret_yaml = f"""
+apiVersion: v1
+kind: Secret
+type: kubernetes.io/dockerconfigjson
+metadata:
+  name: {secret_name}
+
+data:
+  .dockerconfigjson: {docker_pull_secret}
+
+"""
+
+    apply_kubectl_yaml(secret_yaml, namespace, is_debug=is_debug)
+
+    return secret_name
+
+
+def create_port_forward(
+    namespace: str, port_from: int, port_to: int, service: str
+) -> None:
+    typer.echo(f"Port forwarding port {port_from} from {service} to host.")
     subprocess.Popen(
         [
             "kubectl",
             "port-forward",
             "-n",
             namespace,
-            "service/avatar-seaweedfs-s3",
-            f"{SEAWEED_FS_PORT}:{SEAWEED_FS_PORT}",
+            f"service/{service}",
+            f"{port_from}:{port_from}",
         ],
         close_fds=True,
         stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,  # an error is thrown, but port forwarding succeeds
+        stderr=subprocess.DEVNULL,
     )
-    return seaweedfs_result
 
 
 @app.command()
@@ -1093,7 +1239,7 @@ def create_avatar(
         docker_pull_secret=docker_pull_secret,
         pdfgenerator_version=pdfgenerator_version,
         shared_storage_path=shared_storage_path,
-        aws_endpoint_url=f"http://{seaweed_release_name}:{SEAWEED_FS_PORT}",
+        aws_endpoint_url=f"http://{seaweed_release_name}:{SEAWEED_FS_S3_PORT}",
         db_password=db_password,
         db_user=db_user,
         db_name=db_name,

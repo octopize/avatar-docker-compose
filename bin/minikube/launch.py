@@ -21,7 +21,7 @@ GIT_ROOT = Path(
 HELM_CHART_PATH = GIT_ROOT / "services-api-helm-chart"
 SAVE_DIRECTORY = GIT_ROOT / "bin" / "minikube" / "build"
 POSTGRES_HELM_CHART_VERSION = "16.3.2"
-SEAWEEDFS_HELM_CHART_VERSION = "4.2.0"
+SEAWEEDFS_HELM_CHART_VERSION = "4.5.1"
 
 SEAWEED_FS_PORT = 8333
 
@@ -126,8 +126,6 @@ class AvatarHelmConfig(HelmConfig):
     pdfgenerator_memory_request: str
     api_cpu_request: str
     pdfgenerator_cpu_request: str
-
-
 
 
 class Result(BaseModel):
@@ -250,8 +248,7 @@ def get_release_name(chart: Chart, release_name_prefix: str) -> str:
 
 
 class RetryCallable(Protocol):
-    def __call__(self, *, nb_attempts_left: int, is_debug: bool) -> None:
-        ...
+    def __call__(self, *, nb_attempts_left: int, is_debug: bool) -> None: ...
 
 
 def do_retry(
@@ -304,6 +301,25 @@ def do_retry(
         raise typer.Exit(1)
 
 
+def get_secrets(namespace: str) -> list[str]:
+    get_secrets_command = f"kubectl get secrets --no-headers=true -o custom-columns=:metadata.name --namespace {namespace}".split()
+    secrets = subprocess.check_output(get_secrets_command, text=True).splitlines()
+    return secrets
+
+
+def delete_secret(namespace: str, secret: str, is_debug: bool) -> None:
+    delete_secret_command = (
+        f"kubectl delete secret {secret} --namespace {namespace}".split()
+    )
+    if is_debug:
+        typer.echo(f"Deleting secret {secret}...")
+
+    subprocess.run(
+        delete_secret_command,
+        stdout=subprocess.DEVNULL if not is_debug else None,
+    )
+
+
 @app.command()
 def delete_cluster(
     release_name_prefix: str = typer.Option(
@@ -322,13 +338,28 @@ def delete_cluster(
     # All PersistantVolumeClaims have a deletion protection finalizer, which
     # prevents them from being deleted.
     # We remove the finalizer before deleting the volume claim.
-    patch = r'{"metadata" :{"finalizers" : []}}'
     for pvc in pvcs:
-        remove_deletion_protection = [
+        delete_pvc(namespace, pvc, is_debug=is_debug)
+
+    releases = [
+        get_release_name(release_name_prefix=release_name_prefix, chart=chart)
+        for chart in Chart
+    ]
+
+    for release in releases:
+        _delete_releases(namespace, release, is_debug=is_debug)
+
+    for secret in get_secrets(namespace):
+        delete_secret(namespace, secret, is_debug=is_debug)
+
+def delete_pvc(namespace: str, pvc_name: str, *, is_debug: bool) -> None:
+    patch = r'{"metadata" :{"finalizers" : []}}'
+
+    remove_deletion_protection = [
             "kubectl",
             "patch",
             "pvc",
-            pvc,
+            pvc_name,
             "-p",
             patch,
             "--type=merge",
@@ -337,56 +368,52 @@ def delete_cluster(
             "--allow-missing-template-keys=false",
         ]
 
-        delete_pvc = f"kubectl delete pvc {pvc} --namespace {namespace}".split()
+    delete_pvc = f"kubectl delete pvc {pvc_name} --namespace {namespace}".split()
 
-        # For some reason, doing a patch call before a delete call does not manage to modify remove
-        # the finalizers before the deletion is started,
-        # so it still waits indefinitely if we don't specify --wait=false.
-        delete_pvc += ["--wait=false"]
+    # For some reason, doing a patch call before a delete call does not manage to modify remove
+    # the finalizers before the deletion is started,
+    # so it still waits indefinitely if we don't specify --wait=false.
+    delete_pvc += ["--wait=false"]
 
-        if is_debug:
-            typer.echo(f"Deleting {pvc=}")
-            typer.echo(" ".join(remove_deletion_protection))
+    if is_debug:
+        typer.echo(f"Deleting {pvc_name=}")
+        typer.echo(" ".join(remove_deletion_protection))
 
-        subprocess.run(
+    subprocess.run(
             delete_pvc,
             stdout=subprocess.DEVNULL if not is_debug else None,
         )
 
-        if is_debug:
-            typer.echo(f"Removing deletion protection from {pvc=}")
-            typer.echo(" ".join(remove_deletion_protection))
+    if is_debug:
+        typer.echo(f"Removing deletion protection from {pvc_name=}")
+        typer.echo(" ".join(remove_deletion_protection))
 
-        subprocess.run(
+    subprocess.run(
             remove_deletion_protection,
             stdout=subprocess.DEVNULL if not is_debug else None,
         )
 
-    releases = [
-        get_release_name(release_name_prefix=release_name_prefix, chart=chart)
-        for chart in Chart
-    ]
 
-    for release in releases:
-        uninstall_command = ["helm", "uninstall", release, "--namespace", namespace]
+def _delete_releases(namespace: str, release: str, *, is_debug: bool) -> None:
+    uninstall_command = ["helm", "uninstall", release, "--namespace", namespace]
+    if is_debug:
+        typer.echo(f"Deleting Helm release {release}...")
+        typer.echo(" ".join(uninstall_command))
+
+    result = subprocess.run(
+        uninstall_command,
+        stdout=subprocess.DEVNULL if not is_debug else None,
+        stderr=subprocess.DEVNULL if not is_debug else subprocess.PIPE,
+        text=True,
+    )
+
+    return_code = result.returncode
+    if return_code != 0:
         if is_debug:
-            typer.echo(f"Deleting Helm release {release}...")
-            typer.echo(" ".join(uninstall_command))
-
-        result = subprocess.run(
-            uninstall_command,
-            stdout=subprocess.DEVNULL if not is_debug else None,
-            stderr=subprocess.DEVNULL if not is_debug else subprocess.PIPE,
-            text=True,
-        )
-
-        return_code = result.returncode
-        if return_code != 0:
-            if is_debug:
-                typer.echo(result.stderr)
-            typer.echo(f"Could not delete Helm release {release}.")
-        else:
-            typer.echo(f"Deleted Helm release {release}.")
+            typer.echo(result.stderr)
+        typer.echo(f"Could not delete Helm release {release}.")
+    else:
+        typer.echo(f"Deleted Helm release {release}.")
 
 
 @app.command()
@@ -745,14 +772,16 @@ def create_seaweedfs(
 
     mariadb_password = secrets.token_hex(16)
     mariadb_root_password = secrets.token_hex(16)
-    values = [
-        "--set",
+
+
+    values_to_set = [
         f"mariadb.auth.rootPassword={mariadb_password}",
-        "--set",
         f"mariadb.auth.password={mariadb_root_password}",
-        "--set",
         "s3.enabled=true",
+        "iam.enabled=true",
     ]
+
+    values = list(chain.from_iterable(["--set", v] for v in values_to_set))
 
     install_seaweedfs = [
         "helm",
